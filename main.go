@@ -1,74 +1,9 @@
 package main
 
 import (
-     "fmt"
-     "io"
-     "bufio"
      "os"
-     "bytes"
      "github.com/nsf/termbox-go"
 )
-
-type Point struct {
-     x int
-     y int
-}
-
-func (point *Point) String() (string) {
-     return fmt.Sprintf("%d, %d", point.x, point.y)
-}
-
-type Rect struct {
-     left int
-     top int
-     right int
-     bottom int
-}
-
-func NewRectFromPointAndDimension(point Point, dimensions Point) (Rect){
-     return Rect{point.x, point.y, point.x + dimensions.x, point.y + dimensions.y}
-}
-
-func (rect* Rect) Width() (int){
-     return rect.right - rect.left
-}
-
-func (rect* Rect) Height() (int){
-     return rect.bottom - rect.top
-}
-
-func (rect* Rect) Dimensions() (Point){
-     return Point{rect.Width(), rect.Height()}
-}
-
-type Buffer struct {
-     lines      []string
-     cursor     Point
-}
-
-func (buffer *Buffer) Write(bytes []byte) (int, error) {
-     buffer.lines = append(buffer.lines, string(bytes))
-     return len(bytes), nil
-}
-
-func NewFileBuffer(r io.Reader) (buffer *Buffer) {
-     buffer = &Buffer{}
-     scanner := bufio.NewScanner(r)
-
-     for scanner.Scan(){
-          buffer.Write(scanner.Bytes())
-     }
-
-     return buffer
-}
-
-func (buffer *Buffer) String() (string) {
-     var b bytes.Buffer
-     for _, line := range buffer.lines {
-          b.WriteString(line);
-     }
-     return b.String()
-}
 
 func (buffer* Buffer) Draw(view Rect, scroll Point, terminal_dimensions Point) {
      last_row := scroll.y + view.Height()
@@ -111,63 +46,10 @@ func (buffer* Buffer) Draw(view Rect, scroll Point, terminal_dimensions Point) {
      }
 }
 
-func Clamp(value int, min int, max int) (int) {
-     if value < min {
-          return min
-     } else if value > max {
-          return max
-     }
-
-     return value
-}
-
-func (buffer *Buffer) ClampOn(point Point) (p Point) {
-     p.y = Clamp(point.y, 0, len(buffer.lines) - 1)
-     p.x = Clamp(point.x, 0, len(buffer.lines[p.y]))
-     return
-}
-
-func (buffer *Buffer) ClampIn(point Point) (p Point) {
-     p.y = Clamp(point.y, 0, len(buffer.lines) - 1)
-     p.x = Clamp(point.x, 0, len(buffer.lines[p.y]) - 1)
-     return
-}
-
-func (buffer* Buffer) MoveCursor(delta Point) {
-     final := Point{buffer.cursor.x + delta.x, buffer.cursor.y + delta.y}
-     buffer.cursor = buffer.ClampOn(final)
-}
-
-func (buffer* Buffer) SetCursor(point Point) {
-     buffer.cursor = buffer.ClampOn(point)
-}
-
-func ScrollTo(point Point, scroll Point, view_dimensions Point) (Point) {
-     if point.y < scroll.y {
-          scroll.y = point.y
-     } else {
-          // TODO: bobby would like to understand why this works
-          view_dimensions.y--
-          bottom := scroll.y + view_dimensions.y
-
-          if point.y > bottom {
-               scroll.y = point.y - view_dimensions.y
-          }
-     }
-
-     if point.x < scroll.x {
-          scroll.x = point.x
-     } else {
-          // TODO: bobby would like to understand why this works
-          view_dimensions.x--
-          right := scroll.x + view_dimensions.x
-
-          if point.x > right {
-               scroll.x = point.x - view_dimensions.x
-          }
-     }
-
-     return scroll
+func calc_cursor_on_terminal(cursor Point, scroll Point, view_top_left Point) (Point) {
+     cursor.x = cursor.x - scroll.x + view_top_left.x
+     cursor.y = cursor.y - scroll.y + view_top_left.y
+     return cursor
 }
 
 func main() {
@@ -187,18 +69,23 @@ func main() {
      terminal_dimensions := Point{}
      terminal_dimensions.x, terminal_dimensions.y = termbox.Size()
 
-     // TODO: make view
-     view := Rect{0, 0, terminal_dimensions.x, terminal_dimensions.y}
-     scroll := Point{0, 0}
+     layout := VerticalLayout {}
+     layout.layouts = append(layout.layouts, &ViewLayout{View{buffer: b}})
+     layout.layouts = append(layout.layouts, &ViewLayout{View{buffer: b}})
+     layout.layouts = append(layout.layouts, &ViewLayout{View{buffer: b}})
+     selected_layout := layout.layouts[0]
 
 loop:
      for {
           terminal_dimensions.x, terminal_dimensions.y = termbox.Size()
-          view.right = terminal_dimensions.x
-          view.bottom = terminal_dimensions.y
           termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
-          b.Draw(view, scroll, terminal_dimensions)
-          termbox.SetCursor(b.cursor.x - scroll.x + view.left, b.cursor.y - scroll.y + view.top)
+          full_view := Rect{0, 0, terminal_dimensions.x, terminal_dimensions.y}
+          layout.CalculateView(full_view)
+          layout.Draw(terminal_dimensions)
+          view_selected_layout := selected_layout.(*ViewLayout)
+          cursor_on_terminal := calc_cursor_on_terminal(view_selected_layout.view.cursor, view_selected_layout.view.scroll,
+                                                        Point{view_selected_layout.view.rect.left, view_selected_layout.view.rect.top})
+          termbox.SetCursor(cursor_on_terminal.x, cursor_on_terminal.y)
           termbox.Flush()
 
           switch ev := termbox.PollEvent(); ev.Type {
@@ -206,26 +93,47 @@ loop:
                switch ev.Key {
                case termbox.KeyEsc:
                     break loop
+               case termbox.KeyCtrlJ:
+                    new_selected_layout := layout.Find(Point{view_selected_layout.view.buffer.cursor.x, view_selected_layout.view.rect.bottom + 2})
+                    if new_selected_layout != nil {
+                         selected_layout = new_selected_layout
+                    }
+               case termbox.KeyCtrlK:
+                    new_selected_layout := layout.Find(Point{view_selected_layout.view.buffer.cursor.x, view_selected_layout.view.rect.top - 2})
+                    if new_selected_layout != nil {
+                         selected_layout = new_selected_layout
+                    }
+               case termbox.KeyCtrlV:
+                    layout.SplitLayout(view_selected_layout)
+               case termbox.KeyCtrlQ:
+                    if len(layout.layouts) > 1 {
+                         layout.Remove(selected_layout)
+                         layout.CalculateView(full_view)
+                         selected_layout = layout.Find(cursor_on_terminal)
+                    }
                default:
                     switch ev.Ch {
                     case 'h':
-                         b.MoveCursor(Point{-1, 0})
+                         view_selected_layout.view.cursor = b.MoveCursor(view_selected_layout.view.cursor, Point{-1, 0})
                     case 'l':
-                         b.MoveCursor(Point{1, 0})
+                         view_selected_layout.view.cursor = b.MoveCursor(view_selected_layout.view.cursor, Point{1, 0})
                     case 'k':
-                         b.MoveCursor(Point{0, -1})
+                         view_selected_layout.view.cursor = b.MoveCursor(view_selected_layout.view.cursor, Point{0, -1})
                     case 'j':
-                         b.MoveCursor(Point{0, 1})
+                         view_selected_layout.view.cursor = b.MoveCursor(view_selected_layout.view.cursor, Point{0, 1})
                     case 'G':
-                         b.SetCursor(Point{0, len(b.lines) - 1})
+                         view_selected_layout.view.cursor = Point{0, len(b.lines) - 1}
+                         view_selected_layout.view.cursor = b.ClampOn(view_selected_layout.view.cursor)
                     case '$':
-                         b.SetCursor(Point{len(b.lines[b.cursor.y]) - 1, b.cursor.y})
+                         view_selected_layout.view.cursor = Point{len(b.lines[b.cursor.y]) - 1, b.cursor.y}
+                         view_selected_layout.view.cursor = b.ClampOn(view_selected_layout.view.cursor)
                     case '0':
-                         b.SetCursor(Point{0, b.cursor.y})
+                         view_selected_layout.view.cursor = Point{0, b.cursor.y}
+                         view_selected_layout.view.cursor = b.ClampOn(view_selected_layout.view.cursor)
                     }
                }
 
-               scroll = ScrollTo(b.cursor, scroll, view.Dimensions())
+               view_selected_layout.view.ScrollTo(view_selected_layout.view.cursor)
           }
      }
 }
