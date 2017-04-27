@@ -18,10 +18,32 @@ func (point *Point) String() (string) {
      return fmt.Sprintf("%d, %d", point.x, point.y)
 }
 
+type Rect struct {
+     left int
+     top int
+     right int
+     bottom int
+}
+
+func NewRectFromPointAndDimension(point Point, dimensions Point) (Rect){
+     return Rect{point.x, point.y, point.x + dimensions.x, point.y + dimensions.y}
+}
+
+func (rect* Rect) Width() (int){
+     return rect.right - rect.left
+}
+
+func (rect* Rect) Height() (int){
+     return rect.bottom - rect.top
+}
+
+func (rect* Rect) Dimensions() (Point){
+     return Point{rect.Width(), rect.Height()}
+}
+
 type Buffer struct {
      lines      []string
      cursor     Point
-     scroll     int // TODO: move to view
 }
 
 func (buffer *Buffer) Write(bytes []byte) (int, error) {
@@ -48,23 +70,43 @@ func (buffer *Buffer) String() (string) {
      return b.String()
 }
 
-func (buffer* Buffer) Draw(width int, height int) {
-     last_line := buffer.scroll + height
-     if last_line > len(buffer.lines) {
-          last_line = len(buffer.lines)
+func (buffer* Buffer) Draw(view Rect, scroll Point, terminal_dimensions Point) {
+     last_row := scroll.y + view.Height()
+     if last_row > len(buffer.lines) {
+          last_row = len(buffer.lines)
      }
 
-     for y, line := range buffer.lines[buffer.scroll:last_line] {
-          if y >= height {
+     max_col := scroll.x + view.Width()
+     for y, line := range buffer.lines[scroll.y:last_row] {
+          if y >= view.Height() {
                break
           }
 
-          for x, ch := range line {
-               if x >= width {
+          last_col := max_col
+          if last_col > len(line) {
+               last_col = len(line)
+          }
+
+          if scroll.x > last_col {
+               continue
+          }
+
+          final_y := y + view.top
+          if final_y >= terminal_dimensions.y {
+               break
+          }
+
+          for x, ch := range line[scroll.x:last_col] {
+               if x >= view.Width() {
                     break
                }
 
-               termbox.SetCell(x, y, ch, termbox.ColorDefault, termbox.ColorDefault)
+               final_x := x + view.left
+               if final_x >= terminal_dimensions.x {
+                    break
+               }
+
+               termbox.SetCell(final_x, final_y, ch, termbox.ColorDefault, termbox.ColorDefault)
           }
      }
 }
@@ -100,16 +142,28 @@ func (buffer* Buffer) SetCursor(point Point) {
      buffer.cursor = buffer.ClampOn(point)
 }
 
-func ScrollTo(scroll int, point Point, view_height int) (int) {
-     if point.y < scroll {
-          scroll = point.y
+func ScrollTo(point Point, scroll Point, view_dimensions Point) (Point) {
+     if point.y < scroll.y {
+          scroll.y = point.y
      } else {
           // TODO: bobby would like to understand why this works
-          view_height--
-          bottom := scroll + view_height
+          view_dimensions.y--
+          bottom := scroll.y + view_dimensions.y
 
-          if bottom < point.y {
-               scroll = point.y - view_height
+          if point.y > bottom {
+               scroll.y = point.y - view_dimensions.y
+          }
+     }
+
+     if point.x < scroll.x {
+          scroll.x = point.x
+     } else {
+          // TODO: bobby would like to understand why this works
+          view_dimensions.x--
+          right := scroll.x + view_dimensions.x
+
+          if point.x > right {
+               scroll.x = point.x - view_dimensions.x
           }
      }
 
@@ -130,12 +184,21 @@ func main() {
      }
      defer termbox.Close()
 
+     terminal_dimensions := Point{}
+     terminal_dimensions.x, terminal_dimensions.y = termbox.Size()
+
+     // TODO: make view
+     view := Rect{0, 0, terminal_dimensions.x, terminal_dimensions.y}
+     scroll := Point{0, 0}
+
 loop:
      for {
-          terminal_width, terminal_height := termbox.Size()
+          terminal_dimensions.x, terminal_dimensions.y = termbox.Size()
+          view.right = terminal_dimensions.x
+          view.bottom = terminal_dimensions.y
           termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
-          b.Draw(terminal_width, terminal_height)
-          termbox.SetCursor(b.cursor.x, b.cursor.y - b.scroll)
+          b.Draw(view, scroll, terminal_dimensions)
+          termbox.SetCursor(b.cursor.x - scroll.x + view.left, b.cursor.y - scroll.y + view.top)
           termbox.Flush()
 
           switch ev := termbox.PollEvent(); ev.Type {
@@ -162,7 +225,7 @@ loop:
                     }
                }
 
-               b.scroll = ScrollTo(b.scroll, b.cursor, terminal_height)
+               scroll = ScrollTo(b.cursor, scroll, view.Dimensions())
           }
      }
 }
