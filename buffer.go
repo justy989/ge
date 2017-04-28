@@ -5,17 +5,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/nsf/termbox-go"
 	"io"
 )
-
-type Point struct {
-	x int
-	y int
-}
-
-func (point *Point) String() string {
-	return fmt.Sprintf("%d, %d", point.x, point.y)
-}
 
 // basic buffer interface. TODO elaborate
 type Buffer interface {
@@ -33,11 +25,15 @@ type Buffer interface {
 	AppendLine(toInsert string) (err error)
 	// clears all lines from the buffer
 	Clear() (err error)
+	Draw(view Rect, scroll Point, terminal_dimensions Point) (err error)
+	SetCursor(location Point) (err error)
+	Cursor() (cursor Point)
 }
 
 // base implementation of the Buffer interface
 type BaseBuffer struct {
-	lines []string
+	lines  []string
+	cursor Point
 }
 
 func (buffer *BaseBuffer) String() string {
@@ -63,6 +59,15 @@ func (buffer *BaseBuffer) Lines() []string {
 func (buffer *BaseBuffer) validateLineIndex(lineIndex int) (err error) {
 	if lineIndex < 0 || lineIndex+1 > len(buffer.lines) {
 		return errors.New("invalid line index specified")
+	}
+	return
+}
+
+func (buffer *BaseBuffer) validateLocation(location Point) (err error) {
+	if err = buffer.validateLineIndex(location.y); err != nil {
+		return err
+	} else if location.x >= len(buffer.lines[location.y]) {
+		return errors.New("invalid x location specified")
 	}
 	return
 }
@@ -122,6 +127,60 @@ func (buffer *BaseBuffer) Clear() (err error) {
 	return
 }
 
+func (buffer *BaseBuffer) Draw(view Rect, scroll Point, terminal_dimensions Point) (err error) {
+	last_row := scroll.y + view.Height()
+	if last_row > len(buffer.lines) {
+		last_row = len(buffer.lines)
+	}
+
+	max_col := scroll.x + view.Width()
+	for y, line := range buffer.lines[scroll.y:last_row] {
+		if y >= view.Height() {
+			break
+		}
+
+		last_col := max_col
+		if last_col > len(line) {
+			last_col = len(line)
+		}
+
+		if scroll.x > last_col {
+			continue
+		}
+
+		final_y := y + view.top
+		if final_y >= terminal_dimensions.y {
+			break
+		}
+
+		for x, ch := range line[scroll.x:last_col] {
+			if x >= view.Width() {
+				break
+			}
+
+			final_x := x + view.left
+			if final_x >= terminal_dimensions.x {
+				break
+			}
+
+			termbox.SetCell(final_x, final_y, ch, termbox.ColorDefault, termbox.ColorDefault)
+		}
+	}
+	return
+}
+
+func (buffer *BaseBuffer) SetCursor(location Point) (err error) {
+	if err = buffer.validateLocation(location); err != nil {
+		return
+	}
+	buffer.cursor = location
+	return
+}
+
+func (buffer *BaseBuffer) Cursor() (cursor Point) {
+	return buffer.cursor
+}
+
 // buffer interface which adds convenience functions to the basic buffer interface
 // TODO: should this be exposed?
 type EditableBuffer struct {
@@ -136,9 +195,12 @@ func NewEditableBuffer(buffer Buffer) (b *EditableBuffer) {
 func (buffer *EditableBuffer) Load(reader io.Reader) (err error) {
 	// TODO: error handling
 	scanner := bufio.NewScanner(reader)
+	if scanner == nil {
+		panic("how can this happen")
+	}
 
 	for scanner.Scan() {
-		buffer.AppendLine(string(scanner.Bytes()))
+		buffer.AppendLine(scanner.Text())
 	}
 	return
 }
@@ -174,4 +236,22 @@ func (buffer *EditableBuffer) Insert(location Point, toInsert string) (err error
 
 	buffer.SetLine(location.y, line[:location.x]+toInsert+line[location.x:])
 	return
+}
+
+func (buffer *EditableBuffer) ClampOn(point Point) (p Point) {
+	p.y = Clamp(point.y, 0, len(buffer.Lines())-1)
+	p.x = Clamp(point.x, 0, len(buffer.Lines()[p.y]))
+	return
+}
+
+func (buffer *EditableBuffer) ClampIn(point Point) (p Point) {
+	p.y = Clamp(point.y, 0, len(buffer.Lines())-1)
+	p.x = Clamp(point.x, 0, len(buffer.Lines()[p.y])-1)
+	return
+}
+
+func (buffer *EditableBuffer) MoveCursor(cursor Point, delta Point) Point {
+	final := Point{cursor.x + delta.x, cursor.y + delta.y}
+	cursor = buffer.ClampOn(final)
+	return cursor
 }
