@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -15,6 +14,8 @@ import (
 type Buffer interface {
 	// writer interface implementation
 	io.Writer
+	// reader interface implementation
+	io.Reader
 	// return a slice of the lines in the buffer
 	Lines() []string
 	// insert toInsert at the specified index
@@ -27,15 +28,18 @@ type Buffer interface {
 	AppendLine(toInsert string) (err error)
 	// clears all lines from the buffer
 	Clear() (err error)
-	Draw(view Rect, scroll Point, terminal_dimensions Point) (err error)
 	SetCursor(location Point) (err error)
 	Cursor() (cursor Point)
+	Draw(view Rect, scroll Point, terminal_dimensions Point) (err error)
+	//Save() (err error)
 }
 
 // base implementation of the Buffer interface
 type BaseBuffer struct {
 	lines  []string
 	cursor Point
+	// we save by writing out the buffer to io.Writer
+	//saver io.Writer
 }
 
 func (buffer *BaseBuffer) String() string {
@@ -47,9 +51,23 @@ func (buffer *BaseBuffer) String() string {
 }
 
 func (buffer *BaseBuffer) Write(bytes []byte) (int, error) {
-	// TODO: only make new lines when we see a \n
-	buffer.lines = append(buffer.lines, string(bytes))
+	for _, rawLine := range strings.SplitAfter(string(bytes), "\n") {
+		toWrite := strings.TrimRight(rawLine, "\n")
+		if numLines := len(buffer.lines); numLines == 0 {
+			buffer.lines = append(buffer.lines, toWrite)
+		} else {
+			buffer.lines[numLines-1] = buffer.lines[numLines-1] + toWrite
+		}
+
+		if strings.HasSuffix(rawLine, "\n") {
+			buffer.lines = append(buffer.lines, "")
+		}
+	}
 	return len(bytes), nil
+}
+
+func (buffer *BaseBuffer) Read(bytes []byte) (int, error) {
+	// TODO: Implement reader
 }
 
 // writer interface implementation
@@ -195,14 +213,9 @@ func NewEditableBuffer(buffer Buffer) (b *EditableBuffer) {
 
 // load text from reader into the buffer
 func (buffer *EditableBuffer) Load(reader io.Reader) (err error) {
-	// TODO: error handling
-	scanner := bufio.NewScanner(reader)
-	if scanner == nil {
-		panic("how can this happen")
-	}
-
-	for scanner.Scan() {
-		buffer.AppendLine(scanner.Text())
+	_, err = io.Copy(buffer, reader)
+	if err != nil {
+		panic("how can this fail?")
 	}
 	return
 }
@@ -251,8 +264,9 @@ func (buffer *EditableBuffer) Join(lineIndex int) (err error) {
 
 	trimmedLine := strings.TrimRightFunc(buffer.Lines()[lineIndex], unicode.IsSpace)
 	trimmedNextLine := strings.TrimLeftFunc(buffer.Lines()[lineIndex+1], unicode.IsSpace)
+	newLine := strings.TrimRightFunc(trimmedLine+" "+trimmedNextLine, unicode.IsSpace)
 
-	buffer.SetLine(lineIndex, trimmedLine+" "+trimmedNextLine)
+	buffer.SetLine(lineIndex, newLine)
 	buffer.DeleteLine(lineIndex + 1)
 	return
 }
