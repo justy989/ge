@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"github.com/nsf/termbox-go"
 	"io"
+	"strings"
+	"unicode"
 )
 
 // basic buffer interface. TODO elaborate
@@ -238,18 +240,39 @@ func (buffer *EditableBuffer) Insert(location Point, toInsert string) (err error
 	return
 }
 
+// join line with the line following lineIndex and trim whitespace to a single space
+func (buffer *EditableBuffer) Join(lineIndex int) (err error) {
+	if numLines := len(buffer.Lines()); (lineIndex + 1) > numLines {
+		return errors.New(fmt.Sprintf("Invalid lineIndex %d", lineIndex))
+	} else if (lineIndex + 1) == numLines {
+		// last line. nothing to join
+		return
+	}
+
+	trimmedLine := strings.TrimRightFunc(buffer.Lines()[lineIndex], unicode.IsSpace)
+	trimmedNextLine := strings.TrimLeftFunc(buffer.Lines()[lineIndex+1], unicode.IsSpace)
+
+	buffer.SetLine(lineIndex, trimmedLine+" "+trimmedNextLine)
+	buffer.DeleteLine(lineIndex + 1)
+	return
+}
+
+// clamp point to point to a character on the buffer including the location
+// immediately after the end of lines
 func (buffer *EditableBuffer) ClampOn(point Point) (p Point) {
 	p.y = Clamp(point.y, 0, len(buffer.Lines())-1)
 	p.x = Clamp(point.x, 0, len(buffer.Lines()[p.y]))
 	return
 }
 
+// clamp point to point to a character on the buffer
 func (buffer *EditableBuffer) ClampIn(point Point) (p Point) {
 	p.y = Clamp(point.y, 0, len(buffer.Lines())-1)
 	p.x = Clamp(point.x, 0, len(buffer.Lines()[p.y])-1)
 	return
 }
 
+// move cursor along buffer by delta
 func (buffer *EditableBuffer) MoveCursor(cursor Point, delta Point) Point {
 	final := Point{cursor.x + delta.x, cursor.y + delta.y}
 	cursor = buffer.ClampOn(final)

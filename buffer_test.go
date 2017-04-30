@@ -155,3 +155,35 @@ func TestInsert(t *testing.T) {
 		t.Fatal(buffer)
 	}
 }
+
+func TestJoin(t *testing.T) {
+	buffer := NewEditableBuffer(&BaseBuffer{})
+	err := buffer.Load(strings.NewReader("  line0    \n    line1\n  line2\n"))
+	err = buffer.Join(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if buffer.Lines()[0] != "  line0 line1" {
+		t.Log(buffer.Lines()[0])
+		t.Fatal(buffer)
+	} else if buffer.Lines()[1] != "  line2" {
+		t.Log(buffer.Lines()[1])
+		t.Fatal(buffer)
+	}
+
+	err = buffer.Join(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if buffer.Lines()[1] != "  line2" {
+		t.Log(buffer.Lines()[1])
+		t.Fatal(buffer)
+	}
+
+	err = buffer.Join(2)
+	if err == nil {
+		t.Fatal("Invalid line index should fail")
+	}
+}
