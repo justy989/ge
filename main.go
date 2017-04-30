@@ -1,9 +1,13 @@
 package main
 
 import (
+	"compress/bzip2"
+	"compress/gzip"
 	"github.com/nsf/termbox-go"
+	"io"
 	"log"
 	"os"
+	"strings"
 )
 
 func calc_cursor_on_terminal(cursor Point, scroll Point, view_top_left Point) Point {
@@ -14,9 +18,30 @@ func calc_cursor_on_terminal(cursor Point, scroll Point, view_top_left Point) Po
 
 func main() {
 	filename := "main.go"
+	var f io.Reader
 	f, err := os.Open(filename)
 	if err != nil {
-		return
+		log.Fatalf("Open() error: %v", err)
+	}
+	defer f.(io.ReadCloser).Close()
+
+	// handle reading compressed files
+	switch {
+	case strings.HasSuffix(filename, ".gz"):
+		{
+			f, err = gzip.NewReader(f)
+			if err != nil {
+				log.Fatalf("gzip error: %v", err)
+			}
+			defer f.(io.ReadCloser).Close()
+		}
+	case strings.HasSuffix(filename, ".bz2"):
+		{
+			f = bzip2.NewReader(f)
+			if err != nil {
+				log.Fatalf("bzip error: %v", err)
+			}
+		}
 	}
 
 	log.Print("Loading " + filename)
