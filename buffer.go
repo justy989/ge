@@ -68,6 +68,7 @@ func (buffer *BaseBuffer) Write(bytes []byte) (int, error) {
 
 func (buffer *BaseBuffer) Read(bytes []byte) (int, error) {
 	// TODO: Implement reader
+	return -1, errors.New("not yet implemented")
 }
 
 // writer interface implementation
