@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"github.com/nsf/termbox-go"
 	"io"
+	"log"
+	"os"
 	"strings"
 	"unicode"
 )
@@ -216,7 +218,27 @@ func NewEditableBuffer(buffer Buffer) (b *EditableBuffer) {
 func (buffer *EditableBuffer) Load(reader io.Reader) (err error) {
 	_, err = io.Copy(buffer, reader)
 	if err != nil {
-		panic("how can this fail?")
+		file, ok := reader.(*os.File)
+		if ok {
+			info, err := os.Stat(file.Name())
+			if err != nil {
+				log.Fatalf("os.Stat() error: %v", err)
+			}
+			if info.IsDir() {
+				names, err := file.Readdirnames(0)
+				if err != nil {
+					log.Fatalf("Readdirnames() error: %v", err)
+				}
+				for _, filename := range names {
+					err = buffer.AppendLine(filename)
+					if err != nil {
+						log.Fatalf("AppendLine() error: %v", err)
+					}
+				}
+			}
+		} else {
+			log.Fatalf("io.Copy() error: %v", err)
+		}
 	}
 	return
 }
