@@ -9,9 +9,9 @@ import (
 // base buffer test functions
 func TestWrite(t *testing.T) {
 	buffer := BaseBuffer{}
-	buffer.Write([]byte("test"))
+	buffer.Write([]byte("test\n"))
 	t.Log(buffer.String())
-	buffer.Write([]byte("blah"))
+	buffer.Write([]byte("blah\n"))
 	if buffer.Lines()[0] != "test" || buffer.Lines()[1] != "blah" {
 		t.Fatal(buffer.String())
 	}
@@ -72,7 +72,7 @@ func TestSetLine(t *testing.T) {
 // testing editableBuffer
 func TestLoad(t *testing.T) {
 	buffer := NewEditableBuffer(&BaseBuffer{})
-	err := buffer.Load(strings.NewReader("line0\nline1\nline2\nline3\n"))
+	err := buffer.Load(strings.NewReader("line0\nline1\nline2\nline3"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,5 +153,37 @@ func TestInsert(t *testing.T) {
 	if err == nil {
 		t.Log("inserted at invalid location")
 		t.Fatal(buffer)
+	}
+}
+
+func TestJoin(t *testing.T) {
+	buffer := NewEditableBuffer(&BaseBuffer{})
+	err := buffer.Load(strings.NewReader("  line0    \n    line1\n  line2"))
+	err = buffer.Join(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if buffer.Lines()[0] != "  line0 line1" {
+		t.Log(buffer.Lines()[0])
+		t.Fatal(buffer)
+	} else if buffer.Lines()[1] != "  line2" {
+		t.Log(buffer.Lines()[1])
+		t.Fatal(buffer)
+	}
+
+	err = buffer.Join(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if buffer.Lines()[1] != "  line2" {
+		t.Logf("line[1]: '%s'\n", buffer.Lines()[1])
+		t.Fatal(buffer)
+	}
+
+	err = buffer.Join(2)
+	if err == nil {
+		t.Fatal("Invalid line index should fail")
 	}
 }

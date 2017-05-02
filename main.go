@@ -1,9 +1,14 @@
 package main
 
 import (
+	"compress/bzip2"
+	"compress/gzip"
+	"flag"
 	"github.com/nsf/termbox-go"
+	"io"
 	"log"
 	"os"
+	"strings"
 )
 
 func calc_cursor_on_terminal(cursor Point, scroll Point, view_top_left Point) Point {
@@ -13,17 +18,46 @@ func calc_cursor_on_terminal(cursor Point, scroll Point, view_top_left Point) Po
 }
 
 func main() {
-	filename := "main.go"
-	f, err := os.Open(filename)
-	if err != nil {
-		return
+	flag.Parse()
+	files := flag.Args()
+	var buffers []*EditableBuffer
+	for _, file := range files {
+		var f io.Reader
+		f, err := os.Open(file)
+		if err != nil {
+			log.Fatalf("Open() error: %v", err)
+		}
+		defer f.(io.ReadCloser).Close()
+
+		// handle reading compressed files
+		switch {
+		case strings.HasSuffix(file, ".gz"):
+			{
+				f, err = gzip.NewReader(f)
+				if err != nil {
+					log.Fatalf("gzip error: %v", err)
+				}
+				defer f.(io.ReadCloser).Close()
+			}
+		case strings.HasSuffix(file, ".bz2"):
+			{
+				f = bzip2.NewReader(f)
+				if err != nil {
+					log.Fatalf("bzip error: %v", err)
+				}
+			}
+		}
+
+		log.Print("Loading " + file)
+		b := NewEditableBuffer(&BaseBuffer{})
+		b.Load(f)
+		buffers = append(buffers, b)
+	}
+	if len(buffers) == 0 {
+		panic("Ahhh you didn't load any buffers. We should be able to handle this eventually")
 	}
 
-	log.Print("Loading " + filename)
-	b := NewEditableBuffer(&BaseBuffer{})
-	b.Load(f)
-
-	err = termbox.Init()
+	err := termbox.Init()
 	if err != nil {
 		return
 	}
@@ -33,9 +67,10 @@ func main() {
 	terminal_dimensions.x, terminal_dimensions.y = termbox.Size()
 
 	layout := VerticalLayout{}
-	layout.layouts = append(layout.layouts, &ViewLayout{View{buffer: b}})
-	layout.layouts = append(layout.layouts, &ViewLayout{View{buffer: b}})
-	layout.layouts = append(layout.layouts, &ViewLayout{View{buffer: b}})
+	b := buffers[0]
+	for _, buf := range buffers {
+		layout.layouts = append(layout.layouts, &ViewLayout{View{buffer: buf}})
+	}
 	selected_layout := layout.layouts[0]
 
 loop:

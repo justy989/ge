@@ -1,18 +1,23 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
 	"github.com/nsf/termbox-go"
 	"io"
+	"log"
+	"os"
+	"strings"
+	"unicode"
 )
 
 // basic buffer interface. TODO elaborate
 type Buffer interface {
 	// writer interface implementation
 	io.Writer
+	// reader interface implementation
+	io.Reader
 	// return a slice of the lines in the buffer
 	Lines() []string
 	// insert toInsert at the specified index
@@ -25,15 +30,18 @@ type Buffer interface {
 	AppendLine(toInsert string) (err error)
 	// clears all lines from the buffer
 	Clear() (err error)
-	Draw(view Rect, scroll Point, terminal_dimensions Point) (err error)
 	SetCursor(location Point) (err error)
 	Cursor() (cursor Point)
+	Draw(view Rect, scroll Point, terminal_dimensions Point) (err error)
+	//Save() (err error)
 }
 
 // base implementation of the Buffer interface
 type BaseBuffer struct {
 	lines  []string
 	cursor Point
+	// we save by writing out the buffer to io.Writer
+	//saver io.Writer
 }
 
 func (buffer *BaseBuffer) String() string {
@@ -45,9 +53,24 @@ func (buffer *BaseBuffer) String() string {
 }
 
 func (buffer *BaseBuffer) Write(bytes []byte) (int, error) {
-	// TODO: only make new lines when we see a \n
-	buffer.lines = append(buffer.lines, string(bytes))
+	for _, rawLine := range strings.SplitAfter(string(bytes), "\n") {
+		toWrite := strings.TrimRight(rawLine, "\n")
+		if numLines := len(buffer.lines); numLines == 0 {
+			buffer.lines = append(buffer.lines, toWrite)
+		} else {
+			buffer.lines[numLines-1] = buffer.lines[numLines-1] + toWrite
+		}
+
+		if strings.HasSuffix(rawLine, "\n") {
+			buffer.lines = append(buffer.lines, "")
+		}
+	}
 	return len(bytes), nil
+}
+
+func (buffer *BaseBuffer) Read(bytes []byte) (int, error) {
+	// TODO: Implement reader
+	return -1, errors.New("not yet implemented")
 }
 
 // writer interface implementation
@@ -193,14 +216,29 @@ func NewEditableBuffer(buffer Buffer) (b *EditableBuffer) {
 
 // load text from reader into the buffer
 func (buffer *EditableBuffer) Load(reader io.Reader) (err error) {
-	// TODO: error handling
-	scanner := bufio.NewScanner(reader)
-	if scanner == nil {
-		panic("how can this happen")
-	}
-
-	for scanner.Scan() {
-		buffer.AppendLine(scanner.Text())
+	_, err = io.Copy(buffer, reader)
+	if err != nil {
+		file, ok := reader.(*os.File)
+		if ok {
+			info, err := os.Stat(file.Name())
+			if err != nil {
+				log.Fatalf("os.Stat() error: %v", err)
+			}
+			if info.IsDir() {
+				names, err := file.Readdirnames(0)
+				if err != nil {
+					log.Fatalf("Readdirnames() error: %v", err)
+				}
+				for _, filename := range names {
+					err = buffer.AppendLine(filename)
+					if err != nil {
+						log.Fatalf("AppendLine() error: %v", err)
+					}
+				}
+			}
+		} else {
+			log.Fatalf("io.Copy() error: %v", err)
+		}
 	}
 	return
 }
@@ -238,18 +276,40 @@ func (buffer *EditableBuffer) Insert(location Point, toInsert string) (err error
 	return
 }
 
+// join line with the line following lineIndex and trim whitespace to a single space
+func (buffer *EditableBuffer) Join(lineIndex int) (err error) {
+	if numLines := len(buffer.Lines()); (lineIndex + 1) > numLines {
+		return errors.New(fmt.Sprintf("Invalid lineIndex %d", lineIndex))
+	} else if (lineIndex + 1) == numLines {
+		// last line. nothing to join
+		return
+	}
+
+	trimmedLine := strings.TrimRightFunc(buffer.Lines()[lineIndex], unicode.IsSpace)
+	trimmedNextLine := strings.TrimLeftFunc(buffer.Lines()[lineIndex+1], unicode.IsSpace)
+	newLine := strings.TrimRightFunc(trimmedLine+" "+trimmedNextLine, unicode.IsSpace)
+
+	buffer.SetLine(lineIndex, newLine)
+	buffer.DeleteLine(lineIndex + 1)
+	return
+}
+
+// clamp point to point to a character on the buffer including the location
+// immediately after the end of lines
 func (buffer *EditableBuffer) ClampOn(point Point) (p Point) {
 	p.y = Clamp(point.y, 0, len(buffer.Lines())-1)
 	p.x = Clamp(point.x, 0, len(buffer.Lines()[p.y]))
 	return
 }
 
+// clamp point to point to a character on the buffer
 func (buffer *EditableBuffer) ClampIn(point Point) (p Point) {
 	p.y = Clamp(point.y, 0, len(buffer.Lines())-1)
 	p.x = Clamp(point.x, 0, len(buffer.Lines()[p.y])-1)
 	return
 }
 
+// move cursor along buffer by delta
 func (buffer *EditableBuffer) MoveCursor(cursor Point, delta Point) Point {
 	final := Point{cursor.x + delta.x, cursor.y + delta.y}
 	cursor = buffer.ClampOn(final)
