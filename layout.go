@@ -1,14 +1,18 @@
 package main
 
 import "github.com/nsf/termbox-go"
+//import "log"
 
 type Layout interface {
-	View() *View
-	Draw(terminal_dimensions Point)
-	CalculateView(view Rect)
-	Find(query Point) Layout
-	SplitLayout(layout Layout)
-	//SplitVertically() (Layout)
+     View()(*View)
+     Draw(terminal_dimensions Point)
+     CalculateView(view Rect)
+     Find(query Point) (Layout)
+     GetParentOf(layout Layout) (Layout)
+}
+
+type Splitter interface {
+     Split(layout Layout) (Layout)
 }
 
 type VerticalLayout struct {
@@ -21,8 +25,8 @@ type ViewLayout struct {
 }
 
 type MainLayout struct {
-	layout   Layout
-	selected *Layout
+	Layout
+	selected Layout
 }
 
 func (layout *VerticalLayout) View() (view *View) {
@@ -71,12 +75,36 @@ func (layout *VerticalLayout) Find(query Point) Layout {
 	return nil
 }
 
-func (layout *VerticalLayout) SplitLayout(new_layout Layout) {
-	if layout == new_layout {
-		layout.layouts = append(layout.layouts, &VerticalLayout{view: layout.view})
-	}
+func (layout *VerticalLayout) Split(to_split Layout) (Layout){
+     if layout == to_split {
+          layout.layouts = append(layout.layouts, &ViewLayout{view : layout.view})
+          return layout.layouts[len(layout.layouts) - 1]
+     }
 
-	// TODO: split layouts
+     for i, child := range layout.layouts {
+          if child == to_split {
+               splitter, ok := child.(Splitter)
+               if !ok {
+                    // assuming vertical layout for now
+                    replacement_layout := &VerticalLayout{}
+                    replacement_layout.layouts = append(replacement_layout.layouts, &ViewLayout{*child.View()})
+                    replacement_layout.layouts = append(replacement_layout.layouts, &ViewLayout{*child.View()})
+                    layout.layouts[i] = replacement_layout
+                    return replacement_layout.layouts[0]
+               }
+               return splitter.Split(to_split)
+          } else {
+               splitter, ok := child.(Splitter)
+               if ok {
+                    new_split_layout := splitter.Split(to_split)
+                    if new_split_layout != nil {
+                         return new_split_layout
+                    }
+               }
+          }
+     }
+
+     return nil
 }
 
 func (layout *VerticalLayout) Remove(query Layout) {
@@ -88,12 +116,29 @@ func (layout *VerticalLayout) Remove(query Layout) {
 	}
 }
 
+func (layout *VerticalLayout) GetParentOf(query Layout) (Layout) {
+     for _, child := range layout.layouts {
+          if child == query {
+               return layout
+          } else {
+               parent := child.GetParentOf(query)
+               if parent != nil {
+                    return parent
+               }
+          }
+     }
+
+     return nil
+}
+
 func (layout *ViewLayout) View() (view *View) {
 	return &layout.view
 }
 
 func (layout *ViewLayout) Draw(terminal_dimensions Point) {
-	layout.view.buffer.Draw(layout.view.rect, layout.view.scroll, terminal_dimensions)
+     if layout.view.buffer != nil {
+          layout.view.buffer.Draw(layout.view.rect, layout.view.scroll, terminal_dimensions)
+     }
 }
 
 func (layout *ViewLayout) CalculateView(view Rect) {
@@ -108,10 +153,49 @@ func (layout *ViewLayout) Find(query Point) Layout {
 	return nil
 }
 
-func (layout *ViewLayout) SplitLayout(new_layout Layout) {
+func (layout *ViewLayout) Remove(query Layout) {
 	// this is dumb?
 }
 
-func (layout *ViewLayout) Remove(query Layout) {
-	// this is dumb?
+func (layout *ViewLayout) GetParentOf(query Layout) (Layout) {
+     // this is dumb?
+     return nil
+}
+
+func (layout *MainLayout) Split(to_split Layout) (Layout){
+     if layout == to_split || layout.Layout == to_split {
+          if layout.Layout == to_split {
+               if splitter, ok := to_split.(Splitter); ok {
+                    return splitter.Split(to_split)
+               }
+          }
+
+          replacement_layout := &VerticalLayout{}
+          replacement_layout.layouts = append(replacement_layout.layouts, layout.Layout)
+          replacement_layout.layouts = append(replacement_layout.layouts, &ViewLayout{*to_split.View()})
+          layout.Layout = replacement_layout
+          return replacement_layout.layouts[0]
+     }
+
+     new_split_layout := layout.Layout.(Splitter).Split(to_split)
+     if new_split_layout != nil {
+          return new_split_layout
+     } else {
+          // TODO: assuming vertical layout for now
+          replacement_layout := &VerticalLayout{}
+          replacement_layout.layouts = append(replacement_layout.layouts, &ViewLayout{*to_split.View()})
+          replacement_layout.layouts = append(replacement_layout.layouts, &ViewLayout{*to_split.View()})
+          layout.Layout = replacement_layout
+          return replacement_layout.layouts[0]
+     }
+
+     return nil
+}
+
+func (layout *MainLayout) GetParentOf(query Layout) (Layout) {
+     if layout.Layout == query {
+          return layout
+     }
+
+     return layout.Layout.GetParentOf(query)
 }
