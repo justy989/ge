@@ -49,7 +49,7 @@ func main() {
 		}
 
 		log.Print("Loading " + file)
-		b := NewEditableBuffer(&BaseBuffer{})
+		b := NewEditableBuffer(&UndoBuffer{})
 		b.Load(f)
 		buffers = append(buffers, b)
 	}
@@ -128,6 +128,13 @@ loop:
 				case '0':
 					view_selected_layout.view.cursor = Point{0, b.Cursor().y}
 					view_selected_layout.view.cursor = b.ClampOn(view_selected_layout.view.cursor)
+				case 'A':
+					b.Append(9, "WOAH LOOK AT THIS NEW LINE")
+				case 'u':
+					undoer, ok := b.Buffer.(Undoer)
+					if ok {
+						undoer.Undo()
+					}
 				}
 			}
 

@@ -36,12 +36,104 @@ type Buffer interface {
 	//Save() (err error)
 }
 
+type Undoer interface {
+	Buffer
+	Undo() (err error)
+	StartChange()
+	Commit() (err error)
+}
+
+type ChangeType int
+
+const (
+	insertLine = iota
+	setLine    = iota
+	deleteLine = iota
+	appendLine = iota
+)
+
+type Change struct {
+	t        ChangeType
+	old      string
+	new      string
+	location Point
+}
+
+type ChangeGroup struct {
+	startCursor Point
+	changes     []Change
+	endCursor   Point
+}
+
 // base implementation of the Buffer interface
 type BaseBuffer struct {
 	lines  []string
 	cursor Point
 	// we save by writing out the buffer to io.Writer
 	//saver io.Writer
+
+	// next point to read (for implementing the read interface)
+	readNext Point
+}
+
+type UndoBuffer struct {
+	BaseBuffer
+	changeIndex int
+	changes     []ChangeGroup
+	pending     *ChangeGroup
+}
+
+// 1. start change (note: record cursor here too)
+// 2. make changes (insertline, setline, deleteline, appendline)
+// 3. commit change (note: record cursor here too)
+
+func (buffer *UndoBuffer) Undo() (err error) {
+	lastGroup := &buffer.changes[buffer.changeIndex]
+	if len(lastGroup.changes) > 1 {
+		panic("AHHH I don't feel like implementing this right now")
+	}
+	toUndo := &lastGroup.changes[0]
+	switch toUndo.t {
+	default:
+		panic("I AM SO FREAKING OUT")
+	case setLine:
+		buffer.BaseBuffer.SetLine(toUndo.location.y, toUndo.old)
+	}
+	buffer.changeIndex--
+	return nil
+}
+
+func (buffer *UndoBuffer) StartChange() {
+	// record cursor and add marker to indicate start of undo sequence
+	buffer.pending = &ChangeGroup{startCursor: buffer.Cursor()}
+}
+
+func (buffer *UndoBuffer) Commit() (err error) {
+	if buffer.pending == nil {
+		panic("no change pending!")
+	}
+
+	buffer.pending.endCursor = buffer.Cursor()
+	buffer.changes = append(buffer.changes, *buffer.pending)
+	buffer.pending = nil
+	buffer.changeIndex = len(buffer.changes) - 1
+	return nil
+}
+
+func (buffer *UndoBuffer) InsertLine(lineIndex int, toInsert string) (err error) {
+	// TODO: bounds checking
+	change := Change{insertLine, "", toInsert, Point{0, lineIndex}}
+	buffer.BaseBuffer.InsertLine(lineIndex, toInsert)
+	buffer.pending.changes = append(buffer.pending.changes, change)
+	return nil
+}
+
+func (buffer *UndoBuffer) SetLine(lineIndex int, newValue string) (err error) {
+	// TODO: bounds checking
+	change := Change{setLine, buffer.Lines()[lineIndex], newValue, Point{0, lineIndex}}
+	buffer.BaseBuffer.SetLine(lineIndex, newValue)
+	buffer.pending.changes = append(buffer.pending.changes, change)
+	return nil
 }
 
 func (buffer *BaseBuffer) String() string {
@@ -71,6 +163,14 @@ func (buffer *BaseBuffer) Write(bytes []byte) (int, error) {
 func (buffer *BaseBuffer) Read(bytes []byte) (int, error) {
 	// TODO: Implement reader
 	return -1, errors.New("not yet implemented")
+
+	// TODO: read starting at buffer.readNext up to len(bytes)
+	var nRead int
+	for _ = range bytes {
+		nRead++
+	}
+
+	return nRead, nil
 }
 
 // writer interface implementation
@@ -246,7 +346,15 @@ func (buffer *EditableBuffer) Load(reader io.Reader) (err error) {
 // append string to line
 func (buffer *EditableBuffer) Append(lineIndex int, toAppend string) (err error) {
 	// TODO: validate input
+	undoer, ok := buffer.Buffer.(Undoer)
+	if ok {
+		undoer.StartChange()
+	}
+
 	buffer.SetLine(lineIndex, buffer.Lines()[lineIndex]+toAppend)
+	if ok {
+		undoer.Commit()
+	}
 	return
 }
 
@@ -285,12 +393,21 @@ func (buffer *EditableBuffer) Join(lineIndex int) (err error) {
 		return
 	}
 
+	undoer, ok := buffer.Buffer.(Undoer)
+	if ok {
+		undoer.StartChange()
+	}
+
 	trimmedLine := strings.TrimRightFunc(buffer.Lines()[lineIndex], unicode.IsSpace)
 	trimmedNextLine := strings.TrimLeftFunc(buffer.Lines()[lineIndex+1], unicode.IsSpace)
 	newLine := strings.TrimRightFunc(trimmedLine+" "+trimmedNextLine, unicode.IsSpace)
 
 	buffer.SetLine(lineIndex, newLine)
 	buffer.DeleteLine(lineIndex + 1)
+
+	if ok {
+		undoer.Commit()
+	}
 	return
 }
 
