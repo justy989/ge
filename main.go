@@ -135,6 +135,11 @@ loop:
 					if ok {
 						undoer.Undo()
 					}
+				case 'r':
+					undoer, ok := b.Buffer.(Undoer)
+					if ok {
+						undoer.Redo()
+					}
 				}
 			}
 

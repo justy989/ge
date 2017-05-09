@@ -39,6 +39,7 @@ type Buffer interface {
 type Undoer interface {
 	Buffer
 	Undo() (err error)
+	Redo() (err error)
 	StartChange()
 	Commit() (err error)
 }
@@ -88,6 +89,11 @@ type UndoBuffer struct {
 // 3. commit change (note: record cursor here too)
 
 func (buffer *UndoBuffer) Undo() (err error) {
+	if buffer.changeIndex < 0 {
+		// nothing to undo
+		return nil
+	}
+
 	lastGroup := &buffer.changes[buffer.changeIndex]
 	if len(lastGroup.changes) > 1 {
 		panic("AHHH I don't feel like implementing this right now")
@@ -99,7 +105,30 @@ func (buffer *UndoBuffer) Undo() (err error) {
 	case setLine:
 		buffer.BaseBuffer.SetLine(toUndo.location.y, toUndo.old)
 	}
-	buffer.changeIndex--
+	if buffer.changeIndex >= 0 {
+		buffer.changeIndex--
+	}
+	return nil
+}
+
+func (buffer *UndoBuffer) Redo() (err error) {
+	if (buffer.changeIndex + 1) >= len(buffer.changes) {
+		// nothing to redo
+		return nil
+	}
+
+	redoGroup := &buffer.changes[buffer.changeIndex+1]
+	if len(redoGroup.changes) > 1 {
+		panic("AHHH I don't feel like implementing this right now")
+	}
+	toRedo := &redoGroup.changes[0]
+	switch toRedo.t {
+	default:
+		panic("I AM SO FREAKING OUT")
+	case setLine:
+		buffer.BaseBuffer.SetLine(toRedo.location.y, toRedo.new)
+	}
+	buffer.changeIndex++
 	return nil
 }
 
@@ -114,9 +143,17 @@ func (buffer *UndoBuffer) Commit() (err error) {
 	}
 
 	buffer.pending.endCursor = buffer.Cursor()
-	buffer.changes = append(buffer.changes, *buffer.pending)
+	if (buffer.changeIndex + 1) >= len(buffer.changes) {
+		buffer.changes = append(buffer.changes, *buffer.pending)
+		buffer.changeIndex = len(buffer.changes) - 1
+	} else {
+		buffer.changeIndex++
+		buffer.changes[buffer.changeIndex] = *buffer.pending
+		buffer.changes = buffer.changes[:buffer.changeIndex+1]
+	}
+
 	buffer.pending = nil
-	buffer.changeIndex = len(buffer.changes) - 1
+
 	return nil
 }
 
