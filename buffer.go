@@ -78,10 +78,14 @@ type BaseBuffer struct {
 }
 
 type UndoBuffer struct {
-	BaseBuffer
+	Buffer
 	changeIndex int
 	changes     []ChangeGroup
 	pending     *ChangeGroup
+}
+
+func NewUndoBuffer(buffer Buffer) (b *UndoBuffer) {
+	return &UndoBuffer{buffer, -1, nil, nil}
 }
 
 // 1. start change (note: record cursor here too)
@@ -94,16 +98,17 @@ func (buffer *UndoBuffer) Undo() (err error) {
 		return nil
 	}
 
-	lastGroup := &buffer.changes[buffer.changeIndex]
-	if len(lastGroup.changes) > 1 {
+	undoGroup := &buffer.changes[buffer.changeIndex]
+	if len(undoGroup.changes) > 1 {
 		panic("AHHH I don't feel like implementing this right now")
 	}
-	toUndo := &lastGroup.changes[0]
-	switch toUndo.t {
-	default:
-		panic("I AM SO FREAKING OUT")
-	case setLine:
-		buffer.BaseBuffer.SetLine(toUndo.location.y, toUndo.old)
+	for _, toUndo := range undoGroup.changes {
+		switch toUndo.t {
+		default:
+			panic("I AM SO FREAKING OUT")
+		case setLine:
+			buffer.Buffer.SetLine(toUndo.location.y, toUndo.old)
+		}
 	}
 	if buffer.changeIndex >= 0 {
 		buffer.changeIndex--
@@ -118,15 +123,13 @@ func (buffer *UndoBuffer) Redo() (err error) {
 	}
 
 	redoGroup := &buffer.changes[buffer.changeIndex+1]
-	if len(redoGroup.changes) > 1 {
-		panic("AHHH I don't feel like implementing this right now")
-	}
-	toRedo := &redoGroup.changes[0]
-	switch toRedo.t {
-	default:
-		panic("I AM SO FREAKING OUT")
-	case setLine:
-		buffer.BaseBuffer.SetLine(toRedo.location.y, toRedo.new)
+	for _, toRedo := range redoGroup.changes {
+		switch toRedo.t {
+		default:
+			panic("I AM SO FREAKING OUT")
+		case setLine:
+			buffer.Buffer.SetLine(toRedo.location.y, toRedo.new)
+		}
 	}
 	buffer.changeIndex++
 	return nil
@@ -160,7 +163,7 @@ func (buffer *UndoBuffer) Commit() (err error) {
 func (buffer *UndoBuffer) InsertLine(lineIndex int, toInsert string) (err error) {
 	// TODO: bounds checking
 	change := Change{insertLine, "", toInsert, Point{0, lineIndex}}
-	buffer.BaseBuffer.InsertLine(lineIndex, toInsert)
+	buffer.Buffer.InsertLine(lineIndex, toInsert)
 	buffer.pending.changes = append(buffer.pending.changes, change)
 	return nil
 }
@@ -168,7 +171,7 @@ func (buffer *UndoBuffer) InsertLine(lineIndex int, toInsert string) (err error)
 func (buffer *UndoBuffer) SetLine(lineIndex int, newValue string) (err error) {
 	// TODO: bounds checking
 	change := Change{setLine, buffer.Lines()[lineIndex], newValue, Point{0, lineIndex}}
-	buffer.BaseBuffer.SetLine(lineIndex, newValue)
+	buffer.Buffer.SetLine(lineIndex, newValue)
 	buffer.pending.changes = append(buffer.pending.changes, change)
 	return nil
 }

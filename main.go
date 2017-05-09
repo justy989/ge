@@ -49,7 +49,7 @@ func main() {
 		}
 
 		log.Print("Loading " + file)
-		b := NewEditableBuffer(&UndoBuffer{})
+		b := NewEditableBuffer(NewUndoBuffer(&BaseBuffer{}))
 		b.Load(f)
 		buffers = append(buffers, b)
 	}
