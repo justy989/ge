@@ -26,8 +26,6 @@ type Buffer interface {
 	SetLine(lineIndex int, newValue string) (err error)
 	// delete the line at the specified ix
 	DeleteLine(lineIndex int) (err error)
-	// append toInsert to the end of the buffer
-	AppendLine(toInsert string) (err error)
 	// clears all lines from the buffer
 	Clear() (err error)
 	SetCursor(location Point) (err error)
@@ -50,7 +48,6 @@ const (
 	insertLine = iota
 	setLine    = iota
 	deleteLine = iota
-	appendLine = iota
 )
 
 type Change struct {
@@ -105,8 +102,6 @@ func (buffer *UndoBuffer) Undo() (err error) {
 		switch toUndo.t {
 		default:
 			panic("I AM SO FREAKING OUT")
-		case appendLine:
-			fallthrough
 		case insertLine:
 			buffer.Buffer.DeleteLine(toUndo.location.y)
 		case setLine:
@@ -133,8 +128,6 @@ func (buffer *UndoBuffer) Redo() (err error) {
 		switch toRedo.t {
 		default:
 			panic("I AM SO FREAKING OUT")
-		case appendLine:
-			buffer.Buffer.AppendLine(toRedo.new)
 		case insertLine:
 			buffer.Buffer.InsertLine(toRedo.location.y, toRedo.new)
 		case setLine:
@@ -205,14 +198,6 @@ func (buffer *UndoBuffer) DeleteLine(lineIndex int) (err error) {
 	return nil
 }
 
-func (buffer *UndoBuffer) AppendLine(toInsert string) (err error) {
-	// TODO: bounds checking
-	change := Change{appendLine, "", toInsert, Point{0, len(buffer.Lines())}}
-	buffer.Buffer.AppendLine(toInsert)
-	buffer.pending.changes = append(buffer.pending.changes, change)
-	return nil
-}
-
 func (buffer *BaseBuffer) String() string {
 	var b bytes.Buffer
 	for _, line := range buffer.lines {
@@ -275,7 +260,7 @@ func (buffer *BaseBuffer) validateLocation(location Point) (err error) {
 // insert toInsert at the specified index
 func (buffer *BaseBuffer) InsertLine(lineIndex int, toInsert string) (err error) {
 	if lineIndex == len(buffer.lines) {
-		return buffer.AppendLine(toInsert)
+		buffer.lines = append(buffer.lines, toInsert)
 	}
 
 	if err = buffer.validateLineIndex(lineIndex); err != nil {
@@ -293,7 +278,7 @@ func (buffer *BaseBuffer) InsertLine(lineIndex int, toInsert string) (err error)
 // set the line at the specified ix to newValue
 func (buffer *BaseBuffer) SetLine(lineIndex int, newValue string) (err error) {
 	if lineIndex == len(buffer.lines) {
-		return buffer.AppendLine(newValue)
+		return buffer.InsertLine(lineIndex, newValue)
 	}
 
 	if err = buffer.validateLineIndex(lineIndex); err != nil {
@@ -316,12 +301,6 @@ func (buffer *BaseBuffer) DeleteLine(lineIndex int) (err error) {
 	} else {
 		buffer.lines = append(buffer.lines[:lineIndex], buffer.lines[lineIndex+1:]...)
 	}
-	return
-}
-
-// append toInsert to the end of the buffer
-func (buffer *BaseBuffer) AppendLine(toInsert string) (err error) {
-	buffer.lines = append(buffer.lines, toInsert)
 	return
 }
 
@@ -411,9 +390,9 @@ func (buffer *EditableBuffer) Load(reader io.Reader) (err error) {
 					log.Fatalf("Readdirnames() error: %v", err)
 				}
 				for _, filename := range names {
-					err = buffer.AppendLine(filename)
+					err = buffer.InsertLine(len(buffer.Lines()), filename)
 					if err != nil {
-						log.Fatalf("AppendLine() error: %v", err)
+						log.Fatalf("InsertLine() error: %v", err)
 					}
 				}
 			}
@@ -529,7 +508,7 @@ func (buffer *EditableBuffer) AppendLine(toInsert string) error {
 		undoer.StartChange()
 		defer undoer.Commit()
 	}
-	return buffer.Buffer.AppendLine(toInsert)
+	return buffer.Buffer.InsertLine(len(buffer.Lines()), toInsert)
 }
 
 // clamp point to point to a character on the buffer including the location

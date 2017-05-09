@@ -42,8 +42,8 @@ func TestInsertLine(t *testing.T) {
 func TestSetLine(t *testing.T) {
 	buffer := BaseBuffer{}
 	var err error
-	buffer.AppendLine("test")
-	buffer.AppendLine("blah")
+	buffer.InsertLine(0, "test")
+	buffer.InsertLine(1, "blah")
 	err = buffer.SetLine(0, "new1")
 	if err != nil {
 		t.Fatal(err)
