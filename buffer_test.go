@@ -29,6 +29,14 @@ func TestInsertLine(t *testing.T) {
 	if buffer.Lines()[0] != "test" || buffer.Lines()[1] != "blah" {
 		t.Fatal(buffer.String())
 	}
+
+	err = buffer.InsertLine(1, "new")
+	if len(buffer.Lines()) < 3 {
+		t.Fatal(buffer.String())
+	}
+	if buffer.Lines()[0] != "test" || buffer.Lines()[1] != "new" || buffer.Lines()[2] != "blah" {
+		t.Fatal(buffer.String())
+	}
 }
 
 func TestSetLine(t *testing.T) {

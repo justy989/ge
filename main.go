@@ -126,10 +126,16 @@ loop:
 					view_selected_layout.view.cursor = Point{len(b.Lines()[b.Cursor().y]) - 1, b.Cursor().y}
 					view_selected_layout.view.cursor = b.ClampOn(view_selected_layout.view.cursor)
 				case '0':
-					view_selected_layout.view.cursor = Point{0, b.Cursor().y}
+					view_selected_layout.view.cursor = Point{0, view_selected_layout.view.cursor.y}
 					view_selected_layout.view.cursor = b.ClampOn(view_selected_layout.view.cursor)
 				case 'A':
 					b.Append(9, "WOAH LOOK AT THIS NEW LINE")
+				case 'I':
+					b.InsertLine(9, "TESTING")
+				case 'J':
+					b.Join(view_selected_layout.view.cursor.y)
+				case 'd':
+					b.DeleteLine(view_selected_layout.view.cursor.y)
 				case 'u':
 					undoer, ok := b.Buffer.(Undoer)
 					if ok {
