@@ -26,8 +26,6 @@ type Buffer interface {
 	SetLine(lineIndex int, newValue string) (err error)
 	// delete the line at the specified ix
 	DeleteLine(lineIndex int) (err error)
-	// append toInsert to the end of the buffer
-	AppendLine(toInsert string) (err error)
 	// clears all lines from the buffer
 	Clear() (err error)
 	SetCursor(location Point) (err error)
@@ -36,12 +34,168 @@ type Buffer interface {
 	//Save() (err error)
 }
 
+type Undoer interface {
+	Buffer
+	Undo() (err error)
+	Redo() (err error)
+	StartChange()
+	Commit() (err error)
+}
+
+type ChangeType int
+
+const (
+	insertLine = iota
+	setLine    = iota
+	deleteLine = iota
+)
+
+type Change struct {
+	t        ChangeType
+	old      string
+	new      string
+	location Point
+}
+
+type ChangeGroup struct {
+	startCursor Point
+	changes     []Change
+	endCursor   Point
+}
+
 // base implementation of the Buffer interface
 type BaseBuffer struct {
 	lines  []string
 	cursor Point
 	// we save by writing out the buffer to io.Writer
 	//saver io.Writer
+
+	// next point to read (for implementing the read interface)
+	readNext Point
+}
+
+type UndoBuffer struct {
+	Buffer
+	changeIndex int
+	changes     []ChangeGroup
+	nPending    int
+	pending     *ChangeGroup
+}
+
+func NewUndoBuffer(buffer Buffer) (b *UndoBuffer) {
+	return &UndoBuffer{buffer, -1, nil, 0, nil}
+}
+
+// 1. start change (note: record cursor here too)
+// 2. make changes (insertline, setline, deleteline, appendline)
+// 3. commit change (note: record cursor here too)
+
+func (buffer *UndoBuffer) Undo() (err error) {
+	if buffer.changeIndex < 0 {
+		// nothing to undo
+		return nil
+	}
+
+	undoGroup := &buffer.changes[buffer.changeIndex]
+	for i := len(undoGroup.changes) - 1; i >= 0; i-- {
+		toUndo := &undoGroup.changes[i]
+		switch toUndo.t {
+		default:
+			panic("I AM SO FREAKING OUT")
+		case insertLine:
+			buffer.Buffer.DeleteLine(toUndo.location.y)
+		case setLine:
+			buffer.Buffer.SetLine(toUndo.location.y, toUndo.old)
+		case deleteLine:
+			buffer.Buffer.InsertLine(toUndo.location.y, toUndo.old)
+		}
+	}
+	if buffer.changeIndex >= 0 {
+		buffer.changeIndex--
+	}
+	return nil
+}
+
+func (buffer *UndoBuffer) Redo() (err error) {
+	if (buffer.changeIndex + 1) >= len(buffer.changes) {
+		// nothing to redo
+		return nil
+	}
+
+	redoGroup := &buffer.changes[buffer.changeIndex+1]
+	for i := len(redoGroup.changes) - 1; i >= 0; i-- {
+		toRedo := &redoGroup.changes[i]
+		switch toRedo.t {
+		default:
+			panic("I AM SO FREAKING OUT")
+		case insertLine:
+			buffer.Buffer.InsertLine(toRedo.location.y, toRedo.new)
+		case setLine:
+			buffer.Buffer.SetLine(toRedo.location.y, toRedo.new)
+		case deleteLine:
+			buffer.Buffer.DeleteLine(toRedo.location.y)
+		}
+	}
+	buffer.changeIndex++
+	return nil
+}
+
+func (buffer *UndoBuffer) StartChange() {
+	buffer.nPending++
+	if buffer.nPending > 1 {
+		return
+	}
+	// record cursor and add marker to indicate start of undo sequence
+	buffer.pending = &ChangeGroup{startCursor: buffer.Cursor()}
+}
+
+func (buffer *UndoBuffer) Commit() (err error) {
+	if buffer.pending == nil || buffer.nPending == 0 {
+		panic("no change pending!")
+	}
+	buffer.nPending--
+	if buffer.nPending > 0 {
+		// we still have more changes to record before we commit
+		return nil
+	}
+
+	buffer.pending.endCursor = buffer.Cursor()
+	if (buffer.changeIndex + 1) >= len(buffer.changes) {
+		buffer.changes = append(buffer.changes, *buffer.pending)
+		buffer.changeIndex = len(buffer.changes) - 1
+	} else {
+		buffer.changeIndex++
+		buffer.changes[buffer.changeIndex] = *buffer.pending
+		buffer.changes = buffer.changes[:buffer.changeIndex+1]
+	}
+
+	buffer.pending = nil
+
+	return nil
+}
+
+func (buffer *UndoBuffer) InsertLine(lineIndex int, toInsert string) (err error) {
+	// TODO: bounds checking
+	change := Change{insertLine, "", toInsert, Point{0, lineIndex}}
+	buffer.Buffer.InsertLine(lineIndex, toInsert)
+	buffer.pending.changes = append(buffer.pending.changes, change)
+	return nil
+}
+
+func (buffer *UndoBuffer) SetLine(lineIndex int, newValue string) (err error) {
+	// TODO: bounds checking
+	change := Change{setLine, buffer.Lines()[lineIndex], newValue, Point{0, lineIndex}}
+	buffer.Buffer.SetLine(lineIndex, newValue)
+	buffer.pending.changes = append(buffer.pending.changes, change)
+	return nil
+}
+
+func (buffer *UndoBuffer) DeleteLine(lineIndex int) (err error) {
+	// TODO: bounds checking
+	change := Change{deleteLine, buffer.Lines()[lineIndex], "", Point{0, lineIndex}}
+	buffer.Buffer.DeleteLine(lineIndex)
+	buffer.pending.changes = append(buffer.pending.changes, change)
+	return nil
 }
 
 func (buffer *BaseBuffer) String() string {
@@ -71,6 +225,14 @@ func (buffer *BaseBuffer) Write(bytes []byte) (int, error) {
 func (buffer *BaseBuffer) Read(bytes []byte) (int, error) {
 	// TODO: Implement reader
 	return -1, errors.New("not yet implemented")
+
+	// TODO: read starting at buffer.readNext up to len(bytes)
+	var nRead int
+	for _ = range bytes {
+		nRead++
+	}
+
+	return nRead, nil
 }
 
 // writer interface implementation
@@ -98,21 +260,25 @@ func (buffer *BaseBuffer) validateLocation(location Point) (err error) {
 // insert toInsert at the specified index
 func (buffer *BaseBuffer) InsertLine(lineIndex int, toInsert string) (err error) {
 	if lineIndex == len(buffer.lines) {
-		return buffer.AppendLine(toInsert)
+		buffer.lines = append(buffer.lines, toInsert)
 	}
 
 	if err = buffer.validateLineIndex(lineIndex); err != nil {
 		return
 	}
 
-	buffer.lines = append(append(buffer.lines[:lineIndex], toInsert), buffer.lines[lineIndex:]...)
+	// make space for new element
+	buffer.lines = append(buffer.lines, "")
+	// shift elements right
+	copy(buffer.lines[lineIndex+1:], buffer.lines[lineIndex:])
+	buffer.lines[lineIndex] = toInsert
 	return
 }
 
 // set the line at the specified ix to newValue
 func (buffer *BaseBuffer) SetLine(lineIndex int, newValue string) (err error) {
 	if lineIndex == len(buffer.lines) {
-		return buffer.AppendLine(newValue)
+		return buffer.InsertLine(lineIndex, newValue)
 	}
 
 	if err = buffer.validateLineIndex(lineIndex); err != nil {
@@ -135,12 +301,6 @@ func (buffer *BaseBuffer) DeleteLine(lineIndex int) (err error) {
 	} else {
 		buffer.lines = append(buffer.lines[:lineIndex], buffer.lines[lineIndex+1:]...)
 	}
-	return
-}
-
-// append toInsert to the end of the buffer
-func (buffer *BaseBuffer) AppendLine(toInsert string) (err error) {
-	buffer.lines = append(buffer.lines, toInsert)
 	return
 }
 
@@ -230,9 +390,9 @@ func (buffer *EditableBuffer) Load(reader io.Reader) (err error) {
 					log.Fatalf("Readdirnames() error: %v", err)
 				}
 				for _, filename := range names {
-					err = buffer.AppendLine(filename)
+					err = buffer.InsertLine(len(buffer.Lines()), filename)
 					if err != nil {
-						log.Fatalf("AppendLine() error: %v", err)
+						log.Fatalf("InsertLine() error: %v", err)
 					}
 				}
 			}
@@ -245,6 +405,11 @@ func (buffer *EditableBuffer) Load(reader io.Reader) (err error) {
 
 // append string to line
 func (buffer *EditableBuffer) Append(lineIndex int, toAppend string) (err error) {
+	undoer, ok := buffer.Buffer.(Undoer)
+	if ok {
+		undoer.StartChange()
+		defer undoer.Commit()
+	}
 	// TODO: validate input
 	buffer.SetLine(lineIndex, buffer.Lines()[lineIndex]+toAppend)
 	return
@@ -252,6 +417,11 @@ func (buffer *EditableBuffer) Append(lineIndex int, toAppend string) (err error)
 
 // prepend string to line
 func (buffer *EditableBuffer) Prepend(lineIndex int, toPrepend string) (err error) {
+	undoer, ok := buffer.Buffer.(Undoer)
+	if ok {
+		undoer.StartChange()
+		defer undoer.Commit()
+	}
 	// TODO: validate input
 	buffer.SetLine(lineIndex, toPrepend+buffer.Lines()[lineIndex])
 	return
@@ -259,6 +429,11 @@ func (buffer *EditableBuffer) Prepend(lineIndex int, toPrepend string) (err erro
 
 // insert string at point
 func (buffer *EditableBuffer) Insert(location Point, toInsert string) (err error) {
+	undoer, ok := buffer.Buffer.(Undoer)
+	if ok {
+		undoer.StartChange()
+		defer undoer.Commit()
+	}
 	if numLines := len(buffer.Lines()); location.y > numLines {
 		return errors.New(fmt.Sprintf("Invalid Point %v", location))
 	} else if location.y == numLines {
@@ -278,6 +453,11 @@ func (buffer *EditableBuffer) Insert(location Point, toInsert string) (err error
 
 // join line with the line following lineIndex and trim whitespace to a single space
 func (buffer *EditableBuffer) Join(lineIndex int) (err error) {
+	undoer, ok := buffer.Buffer.(Undoer)
+	if ok {
+		undoer.StartChange()
+		defer undoer.Commit()
+	}
 	if numLines := len(buffer.Lines()); (lineIndex + 1) > numLines {
 		return errors.New(fmt.Sprintf("Invalid lineIndex %d", lineIndex))
 	} else if (lineIndex + 1) == numLines {
@@ -291,7 +471,44 @@ func (buffer *EditableBuffer) Join(lineIndex int) (err error) {
 
 	buffer.SetLine(lineIndex, newLine)
 	buffer.DeleteLine(lineIndex + 1)
+
 	return
+}
+
+func (buffer *EditableBuffer) DeleteLine(lineIndex int) error {
+	undoer, ok := buffer.Buffer.(Undoer)
+	if ok {
+		undoer.StartChange()
+		defer undoer.Commit()
+	}
+	return buffer.Buffer.DeleteLine(lineIndex)
+}
+
+func (buffer *EditableBuffer) InsertLine(lineIndex int, toInsert string) error {
+	undoer, ok := buffer.Buffer.(Undoer)
+	if ok {
+		undoer.StartChange()
+		defer undoer.Commit()
+	}
+	return buffer.Buffer.InsertLine(lineIndex, toInsert)
+}
+
+func (buffer *EditableBuffer) SetLine(lineIndex int, newValue string) error {
+	undoer, ok := buffer.Buffer.(Undoer)
+	if ok {
+		undoer.StartChange()
+		defer undoer.Commit()
+	}
+	return buffer.Buffer.SetLine(lineIndex, newValue)
+}
+
+func (buffer *EditableBuffer) AppendLine(toInsert string) error {
+	undoer, ok := buffer.Buffer.(Undoer)
+	if ok {
+		undoer.StartChange()
+		defer undoer.Commit()
+	}
+	return buffer.Buffer.InsertLine(len(buffer.Lines()), toInsert)
 }
 
 // clamp point to point to a character on the buffer including the location
