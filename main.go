@@ -66,17 +66,13 @@ func main() {
 	terminal_dimensions := Point{}
 	terminal_dimensions.x, terminal_dimensions.y = termbox.Size()
 
-	main_layout := &MainLayout{&ViewLayout{}, nil}
-	for i, buf := range buffers {
-          if i == 0 {
-               main_layout.Layout.(*ViewLayout).view.buffer = buf
-               main_layout.selected = main_layout.Layout
-          } else {
-               new_layout := main_layout.Split(main_layout.selected)
-               new_layout.(*ViewLayout).view.buffer = buf
-               main_layout.selected = new_layout
-          }
-     }
+     current_tab := TabLayout{}
+     root_layout := ViewLayout{}
+     root_layout.view.buffer = buffers[0]
+     current_tab.root = &root_layout
+     current_tab.selection = current_tab.root
+
+     // TODO: split layout with buffers that we loaded
 
      cursor_on_terminal := Point{0, 0}
 
@@ -85,16 +81,16 @@ loop:
 		terminal_dimensions.x, terminal_dimensions.y = termbox.Size()
 		termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 		full_view := Rect{0, 0, terminal_dimensions.x, terminal_dimensions.y}
-		main_layout.CalculateView(full_view)
-		main_layout.Draw(terminal_dimensions)
-		view_selected_layout, ok := main_layout.selected.(*ViewLayout)
+		current_tab.CalculateRect(full_view)
+		current_tab.Draw(terminal_dimensions)
+		selected_layout, selected_layout_is_view := current_tab.selection.(*ViewLayout)
           var b *EditableBuffer
-          if ok {
-               cursor_on_terminal = calc_cursor_on_terminal(view_selected_layout.view.cursor, view_selected_layout.view.scroll,
-                    Point{view_selected_layout.view.rect.left, view_selected_layout.view.rect.top})
+          if selected_layout_is_view {
+               cursor_on_terminal = calc_cursor_on_terminal(selected_layout.view.cursor, selected_layout.view.scroll,
+                    Point{selected_layout.view.rect.left, selected_layout.view.rect.top})
                termbox.SetCursor(cursor_on_terminal.x, cursor_on_terminal.y)
-               if view_selected_layout.view.buffer != nil {
-                    b = view_selected_layout.view.buffer.(*EditableBuffer)
+               if selected_layout.view.buffer != nil {
+                    b = selected_layout.view.buffer.(*EditableBuffer)
                }
           }
 
@@ -106,59 +102,44 @@ loop:
 			case termbox.KeyEsc:
 				break loop
 			case termbox.KeyCtrlJ:
-                    if ok {
-                         new_selected_layout := main_layout.Find(Point{view_selected_layout.view.buffer.Cursor().x, view_selected_layout.view.rect.bottom + 2})
-                         if new_selected_layout != nil {
-                              main_layout.selected = new_selected_layout
-                         }
-                    }
+                    current_tab.Move(DIRECTION_DOWN)
 			case termbox.KeyCtrlK:
-                    if ok {
-                         new_selected_layout := main_layout.Find(Point{view_selected_layout.view.buffer.Cursor().x, view_selected_layout.view.rect.top - 2})
-                         if new_selected_layout != nil {
-                              main_layout.selected = new_selected_layout
-                         }
-                    }
+                    current_tab.Move(DIRECTION_UP)
 			case termbox.KeyCtrlV:
-                    main_layout.Split(main_layout.selected)
-                    main_layout.CalculateView(full_view)
-                    main_layout.selected = main_layout.Find(cursor_on_terminal)
+                    current_tab.Split()
 			case termbox.KeyCtrlQ:
-                    //main_layout.Remove(main_layout.selected)
-                    //main_layout.CalculateView(full_view)
-                    //main_layout.selected = main_layout.Find(cursor_on_terminal)
+                    current_tab.Remove()
+               case termbox.KeyCtrlC:
+                    current_tab.Move(DIRECTION_IN)
                case termbox.KeyCtrlP:
-                    parent_layout := main_layout.GetParentOf(main_layout.selected)
-                    if parent_layout != nil {
-					main_layout.selected = parent_layout
-                    }
+                    current_tab.Move(DIRECTION_OUT)
 			default:
-                    if ok && b != nil {
+                    if selected_layout_is_view && b != nil {
                          switch ev.Ch {
                          case 'h':
-                              view_selected_layout.view.cursor = b.MoveCursor(view_selected_layout.view.cursor, Point{-1, 0})
+                              selected_layout.view.cursor = b.MoveCursor(selected_layout.view.cursor, Point{-1, 0})
                          case 'l':
-                              view_selected_layout.view.cursor = b.MoveCursor(view_selected_layout.view.cursor, Point{1, 0})
+                              selected_layout.view.cursor = b.MoveCursor(selected_layout.view.cursor, Point{1, 0})
                          case 'k':
-                              view_selected_layout.view.cursor = b.MoveCursor(view_selected_layout.view.cursor, Point{0, -1})
+                              selected_layout.view.cursor = b.MoveCursor(selected_layout.view.cursor, Point{0, -1})
                          case 'j':
-                              view_selected_layout.view.cursor = b.MoveCursor(view_selected_layout.view.cursor, Point{0, 1})
+                              selected_layout.view.cursor = b.MoveCursor(selected_layout.view.cursor, Point{0, 1})
                          case 'G':
-                              view_selected_layout.view.cursor = Point{0, len(b.Lines()) - 1}
-                              view_selected_layout.view.cursor = b.ClampOn(view_selected_layout.view.cursor)
+                              selected_layout.view.cursor = Point{0, len(b.Lines()) - 1}
+                              selected_layout.view.cursor = b.ClampOn(selected_layout.view.cursor)
                          case '$':
-                              view_selected_layout.view.cursor = Point{len(b.Lines()[b.Cursor().y]) - 1, b.Cursor().y}
-                              view_selected_layout.view.cursor = b.ClampOn(view_selected_layout.view.cursor)
+                              selected_layout.view.cursor = Point{len(b.Lines()[b.Cursor().y]) - 1, b.Cursor().y}
+                              selected_layout.view.cursor = b.ClampOn(selected_layout.view.cursor)
                          case '0':
-                              view_selected_layout.view.cursor = Point{0, b.Cursor().y}
-                              view_selected_layout.view.cursor = b.ClampOn(view_selected_layout.view.cursor)
+                              selected_layout.view.cursor = Point{0, b.Cursor().y}
+                              selected_layout.view.cursor = b.ClampOn(selected_layout.view.cursor)
                          }
                     }
 			}
 
-               view_selected_layout, ok = main_layout.selected.(*ViewLayout)
-               if ok {
-                    view_selected_layout.view.ScrollTo(view_selected_layout.view.cursor)
+               selected_layout, selected_layout_is_view = current_tab.selection.(*ViewLayout)
+               if selected_layout_is_view {
+                    selected_layout.view.ScrollTo(selected_layout.view.cursor)
                }
 		}
 	}
