@@ -11,12 +11,6 @@ import (
 	"strings"
 )
 
-func calc_cursor_on_terminal(cursor Point, scroll Point, view_top_left Point) Point {
-	cursor.x = cursor.x - scroll.x + view_top_left.x
-	cursor.y = cursor.y - scroll.y + view_top_left.y
-	return cursor
-}
-
 func main() {
 	flag.Parse()
 	files := flag.Args()
@@ -73,7 +67,6 @@ func main() {
      current_tab.selection = current_tab.root
 
      // TODO: split layout with buffers that we loaded
-
      cursor_on_terminal := Point{0, 0}
 
 loop:
@@ -105,7 +98,11 @@ loop:
                     current_tab.Move(DIRECTION_DOWN)
 			case termbox.KeyCtrlK:
                     current_tab.Move(DIRECTION_UP)
-			case termbox.KeyCtrlV:
+			case termbox.KeyCtrlH:
+                    current_tab.Move(DIRECTION_LEFT)
+			case termbox.KeyCtrlL:
+                    current_tab.Move(DIRECTION_RIGHT)
+			case termbox.KeyCtrlS:
                     current_tab.Split()
 			case termbox.KeyCtrlQ:
                     current_tab.Remove()
@@ -113,6 +110,22 @@ loop:
                     current_tab.Move(DIRECTION_IN)
                case termbox.KeyCtrlP:
                     current_tab.Move(DIRECTION_OUT)
+               case termbox.KeyCtrlB:
+                    current_tab.selection.SetWillHorizontalSplit(true)
+               case termbox.KeyCtrlV:
+                    current_tab.selection.SetWillHorizontalSplit(false)
+               case termbox.KeyCtrlN:
+                    list_layout, is_list_layout := current_tab.selection.(*ListLayout)
+                    if is_list_layout {
+                         list_layout.SetHorizontal(true)
+                         current_tab.CalculateRect(full_view)
+                    }
+               case termbox.KeyCtrlM:
+                    list_layout, is_list_layout := current_tab.selection.(*ListLayout)
+                    if is_list_layout {
+                         list_layout.SetHorizontal(false)
+                         current_tab.CalculateRect(full_view)
+                    }
 			default:
                     if selected_layout_is_view && b != nil {
                          switch ev.Ch {

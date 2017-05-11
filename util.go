@@ -20,3 +20,10 @@ func Clamp(value int, min int, max int) int {
 
 	return value
 }
+
+func calc_cursor_on_terminal(cursor Point, scroll Point, view_top_left Point) Point {
+	cursor.x = cursor.x - scroll.x + view_top_left.x
+	cursor.y = cursor.y - scroll.y + view_top_left.y
+	return cursor
+}
+
