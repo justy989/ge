@@ -28,11 +28,13 @@ type TabLayout struct {
      root                  Layout
 	selection             Layout
 
-     next                  Layout
-     prev                  Layout
-
      will_horizontal_split bool
+}
 
+type TabListLayout struct {
+     rect      Rect
+     tabs      []TabLayout
+     selection int
 }
 
 func (layout *ListLayout) Rect() (Rect) {
@@ -275,7 +277,11 @@ func (layout *TabLayout) CalculateRect(rect Rect) {
 }
 
 func (layout *TabLayout) Find(query Point) Layout {
-     return layout.root.Find(query)
+     found := layout.root.Find(query)
+     if found == nil {
+          panic("ahhh we didn't find anything")
+     }
+     return found
 }
 
 func (layout *TabLayout) WillHorizontalSplit() (bool) {
@@ -399,37 +405,6 @@ func (layout *TabLayout) Split() {
      layout.selection = layout.Find(loc)
 }
 
-func RemoveLayoutNode (root Layout, itr Layout, match Layout) {
-     switch current_node := itr.(type) {
-     default:
-          panic("unexpected type")
-     case *ViewLayout:
-          return
-     case *ListLayout:
-          for i, child := range current_node.layouts {
-               if child == match {
-                    if len(current_node.layouts) > 1 {
-                         // remove the selection itr
-                         current_node.layouts = append(current_node.layouts[:i], current_node.layouts[i + 1:]...)
-                         // TODO: if only 1 node left, make sure to collapse it to a ViewLayout
-                    } else {
-                         // we're going to remove the last layout, so just remove this vertical layout
-                         RemoveLayoutNode(root, root, current_node)
-                    }
-               } else {
-                    RemoveLayoutNode(root, child, match)
-               }
-          }
-     }
-}
-
-func (layout *TabLayout) Remove() {
-     loc := Point{layout.selection.Rect().left, layout.selection.Rect().top}
-     RemoveLayoutNode(layout.root, layout.root, layout.selection)
-     layout.CalculateRect(layout.rect)
-     layout.selection = layout.Find(loc)
-}
-
 func FindLayoutParent(itr Layout, match Layout) (Layout) {
      switch current_node := itr.(type) {
      default:
@@ -450,6 +425,55 @@ func FindLayoutParent(itr Layout, match Layout) (Layout) {
      }
 
      return nil
+}
+
+func RemoveLayoutNode (root Layout, itr Layout, match Layout) {
+     switch current_node := itr.(type) {
+     default:
+          panic("unexpected type")
+     case *ViewLayout:
+          return
+     case *ListLayout:
+          for i, child := range current_node.layouts {
+               if child == match {
+                    if len(current_node.layouts) > 1 {
+                         // remove the selection itr
+                         current_node.layouts = append(current_node.layouts[:i], current_node.layouts[i + 1:]...)
+                         // if there is only 1 child left, then collapse it
+                         if len(current_node.layouts) == 1 {
+                              existing_view_layout := FindViewLayout(current_node)
+                              if existing_view_layout != nil {
+                                   new_layout := &ViewLayout{existing_view_layout.view, existing_view_layout.will_horizontal_split}
+                                   // replace this noew
+                                   parent := FindLayoutParent(root, itr)
+                                   if parent != nil {
+                                        list_layout := parent.(*ListLayout)
+                                        for i, child := range list_layout.layouts {
+                                             if child == current_node {
+                                                  list_layout.layouts[i] = new_layout
+                                             }
+                                        }
+                                   }
+                              } else {
+                                   panic("no existing view")
+                              }
+                         }
+                    } else {
+                         // we're going to remove the last layout, so just remove this vertical layout
+                         RemoveLayoutNode(root, root, current_node)
+                    }
+               } else {
+                    RemoveLayoutNode(root, child, match)
+               }
+          }
+     }
+}
+
+func (layout *TabLayout) Remove() {
+     loc := Point{layout.selection.Rect().left, layout.selection.Rect().top}
+     RemoveLayoutNode(layout.root, layout.root, layout.selection)
+     layout.CalculateRect(layout.rect)
+     layout.selection = layout.Find(loc)
 }
 
 func (layout *TabLayout) Move(direction Direction) {
@@ -540,6 +564,52 @@ func (layout *TabLayout) Move(direction Direction) {
      }
 }
 
-func (layout *TabLayout) AppendTab() {
+func (layout *TabListLayout) Rect() (Rect) {
+     return layout.rect
+}
 
+func (layout *TabListLayout) Draw(terminal_dimensions Point) {
+     if len(layout.tabs) > 1 {
+          for i := 0; i < layout.rect.right; i++ {
+               termbox.SetCell(i, layout.rect.top, '─', termbox.ColorDefault, termbox.ColorDefault)
+          }
+
+          x := 2
+          termbox.SetCell(x, layout.rect.top, ' ', termbox.ColorDefault, termbox.ColorDefault)
+          x++
+          for i := range layout.tabs {
+               if i == layout.selection {
+                    termbox.SetCell(x, layout.rect.top, rune(i) + '1', termbox.ColorCyan, termbox.ColorDefault)
+               } else {
+                    termbox.SetCell(x, layout.rect.top, rune(i) + '1', termbox.ColorDefault, termbox.ColorDefault)
+               }
+               x++
+               termbox.SetCell(x, layout.rect.top, ' ', termbox.ColorDefault, termbox.ColorDefault)
+               x++
+          }
+     }
+
+     layout.tabs[layout.selection].Draw(terminal_dimensions)
+}
+
+func (layout *TabListLayout) CalculateRect(rect Rect) {
+     layout.rect = rect
+
+     if len(layout.tabs) > 1 {
+          rect.top++
+     }
+
+     layout.tabs[layout.selection].CalculateRect(rect)
+}
+
+func (layout *TabListLayout) Find(query Point) Layout {
+     return layout.tabs[layout.selection].Find(query)
+}
+
+func (layout *TabListLayout) WillHorizontalSplit() (bool) {
+     return false
+}
+
+func (layout *TabListLayout) SetWillHorizontalSplit(value bool) {
+     panic("panic(\"\")");
 }

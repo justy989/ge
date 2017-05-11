@@ -60,7 +60,9 @@ func main() {
 	terminal_dimensions := Point{}
 	terminal_dimensions.x, terminal_dimensions.y = termbox.Size()
 
-     current_tab := TabLayout{}
+     tabs := TabListLayout{}
+     tabs.tabs = append(tabs.tabs, TabLayout{})
+     current_tab := &tabs.tabs[tabs.selection]
      root_layout := ViewLayout{}
      root_layout.view.buffer = buffers[0]
      current_tab.root = &root_layout
@@ -74,8 +76,8 @@ loop:
 		terminal_dimensions.x, terminal_dimensions.y = termbox.Size()
 		termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 		full_view := Rect{0, 0, terminal_dimensions.x, terminal_dimensions.y}
-		current_tab.CalculateRect(full_view)
-		current_tab.Draw(terminal_dimensions)
+		tabs.CalculateRect(full_view)
+		tabs.Draw(terminal_dimensions)
 		selected_view_layout, selected_layout_is_view := current_tab.selection.(*ViewLayout)
           var b *EditableBuffer
           if selected_layout_is_view {
@@ -126,6 +128,17 @@ loop:
                          list_layout.SetHorizontal(false)
                          current_tab.CalculateRect(full_view)
                     }
+               case termbox.KeyCtrlT:
+                    new_tab := TabLayout{}
+                    new_view_layout := ViewLayout{}
+                    new_view_layout.view.buffer = buffers[0]
+                    new_tab.root = &new_view_layout
+                    new_tab.selection = new_tab.root
+                    tabs.tabs = append(tabs.tabs, new_tab)
+               case termbox.KeyCtrlY:
+                    tabs.selection++
+                    tabs.selection %= len(tabs.tabs)
+                    current_tab = &tabs.tabs[tabs.selection]
 			default:
                     if selected_layout_is_view && b != nil {
                          switch ev.Ch {
