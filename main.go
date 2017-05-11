@@ -43,7 +43,7 @@ func main() {
 		}
 
 		log.Print("Loading " + file)
-		b := NewEditableBuffer(&BaseBuffer{})
+		b := NewEditableBuffer(NewUndoBuffer(&BaseBuffer{}))
 		b.Load(f)
 		buffers = append(buffers, b)
 	}
@@ -76,14 +76,14 @@ loop:
 		full_view := Rect{0, 0, terminal_dimensions.x, terminal_dimensions.y}
 		current_tab.CalculateRect(full_view)
 		current_tab.Draw(terminal_dimensions)
-		selected_layout, selected_layout_is_view := current_tab.selection.(*ViewLayout)
+		selected_view_layout, selected_layout_is_view := current_tab.selection.(*ViewLayout)
           var b *EditableBuffer
           if selected_layout_is_view {
-               cursor_on_terminal = calc_cursor_on_terminal(selected_layout.view.cursor, selected_layout.view.scroll,
-                    Point{selected_layout.view.rect.left, selected_layout.view.rect.top})
+               cursor_on_terminal = calc_cursor_on_terminal(selected_view_layout.view.cursor, selected_view_layout.view.scroll,
+                    Point{selected_view_layout.view.rect.left, selected_view_layout.view.rect.top})
                termbox.SetCursor(cursor_on_terminal.x, cursor_on_terminal.y)
-               if selected_layout.view.buffer != nil {
-                    b = selected_layout.view.buffer.(*EditableBuffer)
+               if selected_view_layout.view.buffer != nil {
+                    b = selected_view_layout.view.buffer.(*EditableBuffer)
                }
           }
 
@@ -130,29 +130,47 @@ loop:
                     if selected_layout_is_view && b != nil {
                          switch ev.Ch {
                          case 'h':
-                              selected_layout.view.cursor = b.MoveCursor(selected_layout.view.cursor, Point{-1, 0})
+                              selected_view_layout.view.cursor = b.MoveCursor(selected_view_layout.view.cursor, Point{-1, 0})
                          case 'l':
-                              selected_layout.view.cursor = b.MoveCursor(selected_layout.view.cursor, Point{1, 0})
+                              selected_view_layout.view.cursor = b.MoveCursor(selected_view_layout.view.cursor, Point{1, 0})
                          case 'k':
-                              selected_layout.view.cursor = b.MoveCursor(selected_layout.view.cursor, Point{0, -1})
+                              selected_view_layout.view.cursor = b.MoveCursor(selected_view_layout.view.cursor, Point{0, -1})
                          case 'j':
-                              selected_layout.view.cursor = b.MoveCursor(selected_layout.view.cursor, Point{0, 1})
+                              selected_view_layout.view.cursor = b.MoveCursor(selected_view_layout.view.cursor, Point{0, 1})
                          case 'G':
-                              selected_layout.view.cursor = Point{0, len(b.Lines()) - 1}
-                              selected_layout.view.cursor = b.ClampOn(selected_layout.view.cursor)
+                              selected_view_layout.view.cursor = Point{0, len(b.Lines()) - 1}
+                              selected_view_layout.view.cursor = b.ClampOn(selected_view_layout.view.cursor)
                          case '$':
-                              selected_layout.view.cursor = Point{len(b.Lines()[b.Cursor().y]) - 1, b.Cursor().y}
-                              selected_layout.view.cursor = b.ClampOn(selected_layout.view.cursor)
+                              selected_view_layout.view.cursor = Point{len(b.Lines()[b.Cursor().y]) - 1, b.Cursor().y}
+                              selected_view_layout.view.cursor = b.ClampOn(selected_view_layout.view.cursor)
                          case '0':
-                              selected_layout.view.cursor = Point{0, b.Cursor().y}
-                              selected_layout.view.cursor = b.ClampOn(selected_layout.view.cursor)
+                              selected_view_layout.view.cursor = Point{0, b.Cursor().y}
+                              selected_view_layout.view.cursor = b.ClampOn(selected_view_layout.view.cursor)
+                         case 'A':
+                              b.Append(9, "WOAH LOOK AT THIS NEW LINE")
+                         case 'I':
+                              b.InsertLine(9, "TESTING")
+                         case 'J':
+                              b.Join(selected_view_layout.view.cursor.y)
+                         case 'd':
+                              b.DeleteLine(selected_view_layout.view.cursor.y)
+                         case 'u':
+                              undoer, ok := b.Buffer.(Undoer)
+                              if ok {
+                                   undoer.Undo()
+                              }
+                         case 'r':
+                              undoer, ok := b.Buffer.(Undoer)
+                              if ok {
+                                   undoer.Redo()
+                              }
                          }
                     }
 			}
 
-               selected_layout, selected_layout_is_view = current_tab.selection.(*ViewLayout)
+               selected_view_layout, selected_layout_is_view = current_tab.selection.(*ViewLayout)
                if selected_layout_is_view {
-                    selected_layout.view.ScrollTo(selected_layout.view.cursor)
+                    selected_view_layout.view.ScrollTo(selected_view_layout.view.cursor)
                }
 		}
 	}
