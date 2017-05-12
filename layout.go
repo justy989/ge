@@ -3,9 +3,9 @@ package main
 import "github.com/nsf/termbox-go"
 
 type Layout interface {
-Rect() Rect
-Draw(terminal_dimensions Point)
-CalculateRect(rect Rect)
+	Rect() Rect
+	Draw(terminal_dimensions Point)
+	CalculateRect(rect Rect)
 	Find(query Point) Layout
 	WillHorizontalSplit() bool
 	SetWillHorizontalSplit(bool)
