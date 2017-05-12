@@ -43,7 +43,7 @@ func main() {
 		}
 
 		log.Print("Loading " + file)
-		b := NewEditableBuffer(NewUndoBuffer(&BaseBuffer{}))
+		b := NewEditableBuffer(NewUndoer(&BaseBuffer{}))
 		b.Load(f)
 		buffers = append(buffers, b)
 	}
