@@ -12,7 +12,10 @@ import (
 	"unicode"
 )
 
-// basic buffer interface. TODO elaborate
+// basic buffer interface. this interface is intended to provide a minimal set
+// of functions which must be implemented to load, display, and manipulate a
+// buffer in the go editor; any new methods should be implemented by wrapping
+// this interface whenever possible
 type Buffer interface {
 	// writer interface implementation
 	io.Writer
@@ -33,27 +36,6 @@ type Buffer interface {
 	//MoveCursor(cursor Point, delta Point) (cursor Point) TODO: ADD THIS FOR SURESIES
 	Draw(view Rect, scroll Point, terminal_dimensions Point) (err error)
 	//Save() (err error)
-}
-
-type ChangeType int
-
-const (
-	insertLine = iota
-	setLine    = iota
-	deleteLine = iota
-)
-
-type Change struct {
-	t        ChangeType
-	old      string
-	new      string
-	location Point
-}
-
-type ChangeGroup struct {
-	startCursor Point
-	changes     []Change
-	endCursor   Point
 }
 
 // base implementation of the Buffer interface

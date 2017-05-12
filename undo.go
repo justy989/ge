@@ -3,9 +3,13 @@ package main
 // the undoer interface wraps a buffer with undo functionality
 type Undoer interface {
 	Buffer
+	// undo the last group of buffer changes
 	Undo() (err error)
+	// redo the next group of buffer changes
 	Redo() (err error)
+	// mark the beginning of a group of buffer changes which should be treated as a single change
 	StartChange()
+	// mark the end of a group of buffer changes started with StartChange
 	Commit() (err error)
 }
 
@@ -13,14 +17,35 @@ type Undoer interface {
 type undoBuffer struct {
 	Buffer
 	changeIndex int
-	changes     []ChangeGroup
+	changes     []changeGroup
 	nPending    int
-	pending     *ChangeGroup
+	pending     *changeGroup
 }
 
 // add undo to the provided buffer
 func NewUndoer(buffer Buffer) Undoer {
 	return &undoBuffer{buffer, -1, nil, 0, nil}
+}
+
+type changeType int
+
+const (
+	insertLine changeType = iota
+	setLine               = iota
+	deleteLine            = iota
+)
+
+type change struct {
+	t        changeType
+	old      string
+	new      string
+	location Point
+}
+
+type changeGroup struct {
+	startCursor Point
+	changes     []change
+	endCursor   Point
 }
 
 // 1. start change (note: record cursor here too)
@@ -83,7 +108,7 @@ func (buffer *undoBuffer) StartChange() {
 		return
 	}
 	// record cursor and add marker to indicate start of undo sequence
-	buffer.pending = &ChangeGroup{startCursor: buffer.Cursor()}
+	buffer.pending = &changeGroup{startCursor: buffer.Cursor()}
 }
 
 func (buffer *undoBuffer) Commit() (err error) {
@@ -113,7 +138,7 @@ func (buffer *undoBuffer) Commit() (err error) {
 
 func (buffer *undoBuffer) InsertLine(lineIndex int, toInsert string) (err error) {
 	// TODO: bounds checking
-	change := Change{insertLine, "", toInsert, Point{0, lineIndex}}
+	change := change{insertLine, "", toInsert, Point{0, lineIndex}}
 	buffer.Buffer.InsertLine(lineIndex, toInsert)
 	buffer.pending.changes = append(buffer.pending.changes, change)
 	return nil
@@ -121,7 +146,7 @@ func (buffer *undoBuffer) InsertLine(lineIndex int, toInsert string) (err error)
 
 func (buffer *undoBuffer) SetLine(lineIndex int, newValue string) (err error) {
 	// TODO: bounds checking
-	change := Change{setLine, buffer.Lines()[lineIndex], newValue, Point{0, lineIndex}}
+	change := change{setLine, buffer.Lines()[lineIndex], newValue, Point{0, lineIndex}}
 	buffer.Buffer.SetLine(lineIndex, newValue)
 	buffer.pending.changes = append(buffer.pending.changes, change)
 	return nil
@@ -129,7 +154,7 @@ func (buffer *undoBuffer) SetLine(lineIndex int, newValue string) (err error) {
 
 func (buffer *undoBuffer) DeleteLine(lineIndex int) (err error) {
 	// TODO: bounds checking
-	change := Change{deleteLine, buffer.Lines()[lineIndex], "", Point{0, lineIndex}}
+	change := change{deleteLine, buffer.Lines()[lineIndex], "", Point{0, lineIndex}}
 	buffer.Buffer.DeleteLine(lineIndex)
 	buffer.pending.changes = append(buffer.pending.changes, change)
 	return nil
