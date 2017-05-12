@@ -30,6 +30,7 @@ type Buffer interface {
 	Clear() (err error)
 	SetCursor(location Point) (err error)
 	Cursor() (cursor Point)
+	//MoveCursor(cursor Point, delta Point) (cursor Point) TODO: ADD THIS FOR SURESIES
 	Draw(view Rect, scroll Point, terminal_dimensions Point) (err error)
 	//Save() (err error)
 }
