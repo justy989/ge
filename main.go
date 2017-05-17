@@ -70,6 +70,7 @@ func main() {
 
 	// TODO: split layout with buffers that we loaded
 	cursor_on_terminal := Point{0, 0}
+	settings := Settings{draw: DrawSettings{4}}
 
 loop:
 	for {
@@ -77,7 +78,7 @@ loop:
 		termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 		full_view := Rect{0, 0, terminal_dimensions.x, terminal_dimensions.y}
 		tabs.CalculateRect(full_view)
-		tabs.Draw(terminal_dimensions)
+		tabs.Draw(terminal_dimensions, &settings.draw)
 		selected_view_layout, selected_layout_is_view := current_tab.selection.(*ViewLayout)
 		var b Buffer
 		if selected_layout_is_view {
