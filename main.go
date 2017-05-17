@@ -97,21 +97,21 @@ loop:
 			case termbox.KeyEsc:
 				break loop
 			case termbox.KeyCtrlJ:
-				current_tab.Move(DIRECTION_DOWN)
+				current_tab.MoveSelection(DIRECTION_DOWN)
 			case termbox.KeyCtrlK:
-				current_tab.Move(DIRECTION_UP)
+				current_tab.MoveSelection(DIRECTION_UP)
 			case termbox.KeyCtrlH:
-				current_tab.Move(DIRECTION_LEFT)
+				current_tab.MoveSelection(DIRECTION_LEFT)
 			case termbox.KeyCtrlL:
-				current_tab.Move(DIRECTION_RIGHT)
+				current_tab.MoveSelection(DIRECTION_RIGHT)
 			case termbox.KeyCtrlS:
 				current_tab.Split()
 			case termbox.KeyCtrlQ:
 				current_tab.Remove()
 			case termbox.KeyCtrlC:
-				current_tab.Move(DIRECTION_IN)
+				current_tab.MoveSelection(DIRECTION_IN)
 			case termbox.KeyCtrlP:
-				current_tab.Move(DIRECTION_OUT)
+				current_tab.MoveSelection(DIRECTION_OUT)
 			case termbox.KeyCtrlB:
 				current_tab.PrepareSplit(true)
 			case termbox.KeyCtrlV:
