@@ -14,7 +14,7 @@ import (
 func main() {
 	flag.Parse()
 	files := flag.Args()
-	var buffers []*EditableBuffer
+	var buffers []Buffer
 	for _, file := range files {
 		var f io.Reader
 		f, err := os.Open(file)
@@ -43,8 +43,8 @@ func main() {
 		}
 
 		log.Print("Loading " + file)
-		b := NewEditableBuffer(NewUndoer(&BaseBuffer{}))
-		b.Load(f)
+		b := NewUndoer(&BaseBuffer{})
+		Load(b, f)
 		buffers = append(buffers, b)
 	}
 	if len(buffers) == 0 {
@@ -79,14 +79,12 @@ loop:
 		tabs.CalculateRect(full_view)
 		tabs.Draw(terminal_dimensions)
 		selected_view_layout, selected_layout_is_view := current_tab.selection.(*ViewLayout)
-		var b *EditableBuffer
+		var b Buffer
 		if selected_layout_is_view {
 			cursor_on_terminal = calc_cursor_on_terminal(selected_view_layout.view.cursor, selected_view_layout.view.scroll,
 				Point{selected_view_layout.view.rect.left, selected_view_layout.view.rect.top})
 			termbox.SetCursor(cursor_on_terminal.x, cursor_on_terminal.y)
-			if selected_view_layout.view.buffer != nil {
-				b = selected_view_layout.view.buffer.(*EditableBuffer)
-			}
+			b = selected_view_layout.view.buffer
 		}
 
 		termbox.Flush()
@@ -143,37 +141,37 @@ loop:
 				if selected_layout_is_view && b != nil {
 					switch ev.Ch {
 					case 'h':
-						selected_view_layout.view.cursor = b.MoveCursor(selected_view_layout.view.cursor, Point{-1, 0})
+						selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{-1, 0})
 					case 'l':
-						selected_view_layout.view.cursor = b.MoveCursor(selected_view_layout.view.cursor, Point{1, 0})
+						selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{1, 0})
 					case 'k':
-						selected_view_layout.view.cursor = b.MoveCursor(selected_view_layout.view.cursor, Point{0, -1})
+						selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{0, -1})
 					case 'j':
-						selected_view_layout.view.cursor = b.MoveCursor(selected_view_layout.view.cursor, Point{0, 1})
+						selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{0, 1})
 					case 'G':
 						selected_view_layout.view.cursor = Point{0, len(b.Lines()) - 1}
-						selected_view_layout.view.cursor = b.ClampOn(selected_view_layout.view.cursor)
+						selected_view_layout.view.cursor = ClampOn(b, selected_view_layout.view.cursor)
 					case '$':
 						selected_view_layout.view.cursor = Point{len(b.Lines()[b.Cursor().y]) - 1, b.Cursor().y}
-						selected_view_layout.view.cursor = b.ClampOn(selected_view_layout.view.cursor)
+						selected_view_layout.view.cursor = ClampOn(b, selected_view_layout.view.cursor)
 					case '0':
 						selected_view_layout.view.cursor = Point{0, b.Cursor().y}
-						selected_view_layout.view.cursor = b.ClampOn(selected_view_layout.view.cursor)
+						selected_view_layout.view.cursor = ClampOn(b, selected_view_layout.view.cursor)
 					case 'A':
-						b.Append(9, "WOAH LOOK AT THIS NEW LINE")
+						Append(b, 9, "WOAH LOOK AT THIS NEW LINE")
 					case 'I':
-						b.InsertLine(9, "TESTING")
+						InsertLine(b, 9, "TESTING")
 					case 'J':
-						b.Join(selected_view_layout.view.cursor.y)
+						Join(b, selected_view_layout.view.cursor.y)
 					case 'd':
-						b.DeleteLine(selected_view_layout.view.cursor.y)
+						DeleteLine(b, selected_view_layout.view.cursor.y)
 					case 'u':
-						undoer, ok := b.Buffer.(Undoer)
+						undoer, ok := b.(Undoer)
 						if ok {
 							undoer.Undo()
 						}
 					case 'r':
-						undoer, ok := b.Buffer.(Undoer)
+						undoer, ok := b.(Undoer)
 						if ok {
 							undoer.Redo()
 						}

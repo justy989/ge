@@ -3,13 +3,9 @@ package main
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"github.com/nsf/termbox-go"
 	"io"
-	"log"
-	"os"
 	"strings"
-	"unicode"
 )
 
 // basic buffer interface. this interface is intended to provide a minimal set
@@ -49,12 +45,17 @@ type BaseBuffer struct {
 	readNext Point
 }
 
-func (buffer *BaseBuffer) String() string {
+// generalized function to stringify a buffer
+func stringify_buffer(buffer Buffer) string {
 	var b bytes.Buffer
-	for _, line := range buffer.lines {
+	for _, line := range buffer.Lines() {
 		b.WriteString(line + "\\n")
 	}
 	return b.String()
+}
+
+func (buffer *BaseBuffer) String() string {
+	return stringify_buffer(buffer)
 }
 
 func (buffer *BaseBuffer) Write(bytes []byte) (int, error) {
@@ -213,173 +214,4 @@ func (buffer *BaseBuffer) SetCursor(location Point) (err error) {
 
 func (buffer *BaseBuffer) Cursor() (cursor Point) {
 	return buffer.cursor
-}
-
-// buffer interface which adds convenience functions to the basic buffer interface
-// TODO: should this be exposed?
-type EditableBuffer struct {
-	Buffer
-}
-
-func NewEditableBuffer(buffer Buffer) (b *EditableBuffer) {
-	return &EditableBuffer{buffer}
-}
-
-// load text from reader into the buffer
-func (buffer *EditableBuffer) Load(reader io.Reader) (err error) {
-	_, err = io.Copy(buffer, reader)
-	if err != nil {
-		file, ok := reader.(*os.File)
-		if ok {
-			info, err := os.Stat(file.Name())
-			if err != nil {
-				log.Fatalf("os.Stat() error: %v", err)
-			}
-			if info.IsDir() {
-				names, err := file.Readdirnames(0)
-				if err != nil {
-					log.Fatalf("Readdirnames() error: %v", err)
-				}
-				for _, filename := range names {
-					err = buffer.InsertLine(len(buffer.Lines()), filename)
-					if err != nil {
-						log.Fatalf("InsertLine() error: %v", err)
-					}
-				}
-			}
-		} else {
-			log.Fatalf("io.Copy() error: %v", err)
-		}
-	}
-	return
-}
-
-// append string to line
-func (buffer *EditableBuffer) Append(lineIndex int, toAppend string) (err error) {
-	undoer, ok := buffer.Buffer.(Undoer)
-	if ok {
-		undoer.StartChange()
-		defer undoer.Commit()
-	}
-	// TODO: validate input
-	buffer.SetLine(lineIndex, buffer.Lines()[lineIndex]+toAppend)
-	return
-}
-
-// prepend string to line
-func (buffer *EditableBuffer) Prepend(lineIndex int, toPrepend string) (err error) {
-	undoer, ok := buffer.Buffer.(Undoer)
-	if ok {
-		undoer.StartChange()
-		defer undoer.Commit()
-	}
-	// TODO: validate input
-	buffer.SetLine(lineIndex, toPrepend+buffer.Lines()[lineIndex])
-	return
-}
-
-// insert string at point
-func (buffer *EditableBuffer) Insert(location Point, toInsert string) (err error) {
-	undoer, ok := buffer.Buffer.(Undoer)
-	if ok {
-		undoer.StartChange()
-		defer undoer.Commit()
-	}
-	if numLines := len(buffer.Lines()); location.y > numLines {
-		return errors.New(fmt.Sprintf("Invalid Point %v", location))
-	} else if location.y == numLines {
-		return buffer.AppendLine(toInsert)
-	}
-
-	line := buffer.Lines()[location.y]
-	if numCharacters := len(line); location.x > numCharacters {
-		return errors.New(fmt.Sprintf("Invalid Point %v", location))
-	} else if location.x == numCharacters {
-		return buffer.Append(location.y, toInsert)
-	}
-
-	buffer.SetLine(location.y, line[:location.x]+toInsert+line[location.x:])
-	return
-}
-
-// join line with the line following lineIndex and trim whitespace to a single space
-func (buffer *EditableBuffer) Join(lineIndex int) (err error) {
-	undoer, ok := buffer.Buffer.(Undoer)
-	if ok {
-		undoer.StartChange()
-		defer undoer.Commit()
-	}
-	if numLines := len(buffer.Lines()); (lineIndex + 1) > numLines {
-		return errors.New(fmt.Sprintf("Invalid lineIndex %d", lineIndex))
-	} else if (lineIndex + 1) == numLines {
-		// last line. nothing to join
-		return
-	}
-
-	trimmedLine := strings.TrimRightFunc(buffer.Lines()[lineIndex], unicode.IsSpace)
-	trimmedNextLine := strings.TrimLeftFunc(buffer.Lines()[lineIndex+1], unicode.IsSpace)
-	newLine := strings.TrimRightFunc(trimmedLine+" "+trimmedNextLine, unicode.IsSpace)
-
-	buffer.SetLine(lineIndex, newLine)
-	buffer.DeleteLine(lineIndex + 1)
-
-	return
-}
-
-func (buffer *EditableBuffer) DeleteLine(lineIndex int) error {
-	undoer, ok := buffer.Buffer.(Undoer)
-	if ok {
-		undoer.StartChange()
-		defer undoer.Commit()
-	}
-	return buffer.Buffer.DeleteLine(lineIndex)
-}
-
-func (buffer *EditableBuffer) InsertLine(lineIndex int, toInsert string) error {
-	undoer, ok := buffer.Buffer.(Undoer)
-	if ok {
-		undoer.StartChange()
-		defer undoer.Commit()
-	}
-	return buffer.Buffer.InsertLine(lineIndex, toInsert)
-}
-
-func (buffer *EditableBuffer) SetLine(lineIndex int, newValue string) error {
-	undoer, ok := buffer.Buffer.(Undoer)
-	if ok {
-		undoer.StartChange()
-		defer undoer.Commit()
-	}
-	return buffer.Buffer.SetLine(lineIndex, newValue)
-}
-
-func (buffer *EditableBuffer) AppendLine(toInsert string) error {
-	undoer, ok := buffer.Buffer.(Undoer)
-	if ok {
-		undoer.StartChange()
-		defer undoer.Commit()
-	}
-	return buffer.Buffer.InsertLine(len(buffer.Lines()), toInsert)
-}
-
-// clamp point to point to a character on the buffer including the location
-// immediately after the end of lines
-func (buffer *EditableBuffer) ClampOn(point Point) (p Point) {
-	p.y = Clamp(point.y, 0, len(buffer.Lines())-1)
-	p.x = Clamp(point.x, 0, len(buffer.Lines()[p.y]))
-	return
-}
-
-// clamp point to point to a character on the buffer
-func (buffer *EditableBuffer) ClampIn(point Point) (p Point) {
-	p.y = Clamp(point.y, 0, len(buffer.Lines())-1)
-	p.x = Clamp(point.x, 0, len(buffer.Lines()[p.y])-1)
-	return
-}
-
-// move cursor along buffer by delta
-func (buffer *EditableBuffer) MoveCursor(cursor Point, delta Point) Point {
-	final := Point{cursor.x + delta.x, cursor.y + delta.y}
-	cursor = buffer.ClampOn(final)
-	return cursor
 }
