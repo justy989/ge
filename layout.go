@@ -301,8 +301,7 @@ func (layout *TabLayout) Split() {
 }
 
 func (layout *TabLayout) Remove() {
-	_, is_view_layout := layout.selection.(*ViewLayout)
-	if is_view_layout {
+	if layout.selection != layout.root && viewLayoutCount(layout.root) > 1 {
 		loc := Point{layout.selection.Rect().left, layout.selection.Rect().top}
 		removeLayoutNode(layout.root, layout.root, layout.selection)
 		layout.CalculateRect(layout.rect)
@@ -405,10 +404,6 @@ func (layout *TabLayout) PrepareSplit(horizontal bool) {
 			list_layout.horizontal = horizontal
 			return
 		}
-
-		//if list_layout.horizontal == horizontal {
-		//return
-		//}
 	}
 
 	new_layout := ListLayout{}
@@ -555,11 +550,6 @@ func removeLayoutNode(root Layout, itr Layout, match Layout) {
 	case *ListLayout:
 		for i, child := range current_node.layouts {
 			if child == match {
-				// skip removing if this is the last one
-				if itr == root && len(current_node.layouts) == 1 {
-					return
-				}
-
 				// remove the selection itr
 				current_node.layouts = append(current_node.layouts[:i], current_node.layouts[i+1:]...)
 
@@ -572,4 +562,20 @@ func removeLayoutNode(root Layout, itr Layout, match Layout) {
 			}
 		}
 	}
+}
+
+func viewLayoutCount(itr Layout) int {
+	switch current_node := itr.(type) {
+	default:
+	case *ViewLayout:
+		return 1
+	case *ListLayout:
+		count := 0
+		for _, child := range current_node.layouts {
+			count += viewLayoutCount(child)
+		}
+		return count
+	}
+
+	return 0
 }
