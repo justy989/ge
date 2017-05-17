@@ -309,7 +309,7 @@ func (layout *TabLayout) Remove() {
 	}
 }
 
-func (layout *TabLayout) MoveSelection(direction Direction) {
+func (layout *TabLayout) Select(direction Direction) {
 	switch direction {
 	default:
 		panic("unexpected direction")
