@@ -11,6 +11,8 @@ import (
 	"strings"
 )
 
+// TODO: greetings 'something about a go pro'
+
 func main() {
 	flag.Parse()
 	files := flag.Args()
@@ -70,6 +72,9 @@ func main() {
 
 	// TODO: split layout with buffers that we loaded
 	cursor_on_terminal := Point{0, 0}
+
+	var vim Vim
+	vim.init()
 
 loop:
 	for {
@@ -140,14 +145,14 @@ loop:
 			default:
 				if selected_layout_is_view && b != nil {
 					switch ev.Ch {
-					case 'h':
-						selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{-1, 0})
-					case 'l':
-						selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{1, 0})
-					case 'k':
-						selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{0, -1})
-					case 'j':
-						selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{0, 1})
+					default:
+						state, action := vim.ParseAction(ev.Ch)
+						if state == PARSE_ACTION_STATE_COMPLETE {
+							success, new_cursor := vim.Perform(action, b, selected_view_layout.view.cursor)
+							if success {
+								selected_view_layout.view.cursor = new_cursor
+							}
+						}
 					case 'G':
 						selected_view_layout.view.cursor = Point{0, len(b.Lines()) - 1}
 						selected_view_layout.view.cursor = ClampOn(b, selected_view_layout.view.cursor)
