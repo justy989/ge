@@ -79,10 +79,8 @@ func main() {
 		}
 	}()
 
-	iteration := 0
 loop:
 	for {
-		iteration++
 		terminal_dimensions.x, terminal_dimensions.y = termbox.Size()
 		termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 		full_view := Rect{0, 0, terminal_dimensions.x, terminal_dimensions.y}
