@@ -310,6 +310,27 @@ func (layout *TabLayout) Remove() {
 }
 
 func (layout *TabLayout) Select(direction Direction) {
+	list_selection_layout, is_list_selection := layout.selection.(*ListLayout)
+	if is_list_selection {
+		if len(list_selection_layout.layouts) == 1 {
+			if list_selection_layout == layout.root {
+				layout.root = list_selection_layout.layouts[0] // "fuhget abaht it" -Garbage Collector, Circa 57 BC
+				layout.selection = layout.root
+			} else {
+				// remove the list layout with only 1 element
+				parent := findLayoutParent(layout.root, layout.selection)
+				list_parent := parent.(*ListLayout)
+				for i, child := range list_parent.layouts {
+					if child == layout {
+						list_parent.layouts[i] = list_selection_layout.layouts[0]
+						layout.selection = list_parent.layouts[i]
+						break
+					}
+				}
+			}
+		}
+	}
+
 	switch direction {
 	default:
 		panic("unexpected direction")
@@ -327,10 +348,6 @@ func (layout *TabLayout) Select(direction Direction) {
 				Point{current_layout.view.rect.left, current_layout.view.rect.top})
 			layout.selection = layout.FindView(Point{new_x, cursor.y})
 		case *ListLayout:
-			if len(current_layout.layouts) == 1 {
-				layout.Remove()
-			}
-
 			layout.selection = layout.FindView(Point{new_x, current_layout.Rect().top})
 		}
 	case DIRECTION_UP:
