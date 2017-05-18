@@ -79,8 +79,8 @@ func TestSetLine(t *testing.T) {
 
 // testing editableBuffer
 func TestLoad(t *testing.T) {
-	buffer := NewEditableBuffer(&BaseBuffer{})
-	err := buffer.Load(strings.NewReader("line0\nline1\nline2\nline3"))
+	buffer := &BaseBuffer{}
+	err := Load(buffer, strings.NewReader("line0\nline1\nline2\nline3"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,9 +98,9 @@ func TestLoad(t *testing.T) {
 }
 
 func TestInsert(t *testing.T) {
-	buffer := NewEditableBuffer(&BaseBuffer{})
-	err := buffer.Load(strings.NewReader("line0\nline1\nline2\nline3\n"))
-	err = buffer.Insert(Point{0, 0}, "new0")
+	buffer := &BaseBuffer{}
+	err := Load(buffer, strings.NewReader("line0\nline1\nline2\nline3\n"))
+	err = Insert(buffer, Point{0, 0}, "new0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestInsert(t *testing.T) {
 		t.Fatal(buffer)
 	}
 
-	err = buffer.Insert(Point{4, 1}, "new1")
+	err = Insert(buffer, Point{4, 1}, "new1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestInsert(t *testing.T) {
 		t.Fatal(buffer)
 	}
 
-	err = buffer.Insert(Point{5, 2}, "new2")
+	err = Insert(buffer, Point{5, 2}, "new2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestInsert(t *testing.T) {
 		t.Fatal(buffer)
 	}
 
-	err = buffer.Insert(Point{6, 3}, "invalid0")
+	err = Insert(buffer, Point{6, 3}, "invalid0")
 	if err == nil {
 		t.Log("inserted at invalid location")
 		t.Fatal(buffer)
@@ -142,7 +142,7 @@ func TestInsert(t *testing.T) {
 		t.Fatal(buffer)
 	}
 
-	err = buffer.Insert(Point{0, 4}, "new4")
+	err = Insert(buffer, Point{0, 4}, "new4")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,13 +151,13 @@ func TestInsert(t *testing.T) {
 		t.Fatal(buffer)
 	}
 
-	err = buffer.Insert(Point{0, 6}, "invalid1")
+	err = Insert(buffer, Point{0, 6}, "invalid1")
 	if err == nil {
 		t.Log("inserted at invalid location")
 		t.Fatal(buffer)
 	}
 
-	err = buffer.Insert(Point{1, 6}, "invalid2")
+	err = Insert(buffer, Point{1, 6}, "invalid2")
 	if err == nil {
 		t.Log("inserted at invalid location")
 		t.Fatal(buffer)
@@ -165,9 +165,9 @@ func TestInsert(t *testing.T) {
 }
 
 func TestJoin(t *testing.T) {
-	buffer := NewEditableBuffer(&BaseBuffer{})
-	err := buffer.Load(strings.NewReader("  line0    \n    line1\n  line2"))
-	err = buffer.Join(0)
+	buffer := &BaseBuffer{}
+	err := Load(buffer, strings.NewReader("  line0    \n    line1\n  line2"))
+	err = Join(buffer, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestJoin(t *testing.T) {
 		t.Fatal(buffer)
 	}
 
-	err = buffer.Join(1)
+	err = Join(buffer, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestJoin(t *testing.T) {
 		t.Fatal(buffer)
 	}
 
-	err = buffer.Join(2)
+	err = Join(buffer, 2)
 	if err == nil {
 		t.Fatal("Invalid line index should fail")
 	}

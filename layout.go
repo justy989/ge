@@ -1,21 +1,12 @@
 package main
 
 import "github.com/nsf/termbox-go"
-import "log"
-
-type SplitType int
-
-const (
-	SPLIT_TYPE_PARENT SplitType = iota
-	SPLIT_TYPE_HORIZONTAL
-	SPLIT_TYPE_VERTICAL
-)
 
 type Layout interface {
 	Rect() Rect
 	Draw(terminal_dimensions Point)
 	CalculateRect(rect Rect)
-	Find(query Point) Layout
+	FindView(query Point) Layout
 }
 
 type ListLayout struct {
@@ -29,10 +20,9 @@ type ViewLayout struct {
 }
 
 type TabLayout struct {
-	rect       Rect
-	root       Layout
-	selection  Layout
-	split_type SplitType
+	rect      Rect
+	root      Layout
+	selection Layout
 }
 
 type TabListLayout struct {
@@ -109,9 +99,9 @@ func (layout *ListLayout) CalculateRect(rect Rect) {
 	}
 }
 
-func (layout *ListLayout) Find(query Point) Layout {
+func (layout *ListLayout) FindView(query Point) Layout {
 	for _, child := range layout.layouts {
-		matched_layout := child.Find(query)
+		matched_layout := child.FindView(query)
 		if matched_layout != nil {
 			return matched_layout
 		}
@@ -138,7 +128,7 @@ func (layout *ViewLayout) CalculateRect(rect Rect) {
 	layout.view.rect = rect
 }
 
-func (layout *ViewLayout) Find(query Point) Layout {
+func (layout *ViewLayout) FindView(query Point) Layout {
 	if layout.view.rect.Contains(query) {
 		return layout
 	}
@@ -175,16 +165,27 @@ func (layout *TabLayout) Draw(terminal_dimensions Point) {
 		termbox.SetCell(i, layout.rect.bottom-1, '─', termbox.ColorDefault, termbox.ColorDefault)
 	}
 
-	termbox.SetCell(rect.right-4, rect.bottom, ' ', termbox.ColorDefault, termbox.ColorDefault)
+	termbox.SetCell(rect.right-5, rect.bottom, ' ', termbox.ColorDefault, termbox.ColorDefault)
 	termbox.SetCell(rect.right-2, rect.bottom, ' ', termbox.ColorDefault, termbox.ColorDefault)
 
 	list_layout, is_selection_list_layout := layout.selection.(*ListLayout)
 	if is_selection_list_layout {
-		if list_layout.horizontal {
-			termbox.SetCell(rect.right-3, rect.bottom, 'H', termbox.ColorDefault, termbox.ColorDefault)
+		var first_ch rune
+		var second_ch rune
+		if len(list_layout.layouts) > 1 {
+			first_ch = 'A'
 		} else {
-			termbox.SetCell(rect.right-3, rect.bottom, 'V', termbox.ColorDefault, termbox.ColorDefault)
+			first_ch = 'S'
 		}
+
+		if list_layout.horizontal {
+			second_ch = 'H'
+		} else {
+			second_ch = 'V'
+		}
+
+		termbox.SetCell(rect.right-4, rect.bottom, first_ch, termbox.ColorDefault, termbox.ColorDefault)
+		termbox.SetCell(rect.right-3, rect.bottom, second_ch, termbox.ColorDefault, termbox.ColorDefault)
 	}
 
 	// post process to connect the lines
@@ -264,8 +265,8 @@ func (layout *TabLayout) CalculateRect(rect Rect) {
 	layout.root.CalculateRect(rect)
 }
 
-func (layout *TabLayout) Find(query Point) Layout {
-	found := layout.root.Find(query)
+func (layout *TabLayout) FindView(query Point) Layout {
+	found := layout.root.FindView(query)
 	if found == nil {
 		panic("ahhh we didn't find anything")
 	}
@@ -275,50 +276,61 @@ func (layout *TabLayout) Find(query Point) Layout {
 func (layout *TabLayout) Split() {
 	loc := Point{layout.selection.Rect().left, layout.selection.Rect().top}
 
-	if layout.selection == layout {
-		existing_view_layout := findViewLayout(layout.root)
-		if existing_view_layout != nil {
-			new_layout := &ListLayout{}
-			new_layout.layouts = append(new_layout.layouts, layout.root)
-			new_layout.layouts = append(new_layout.layouts, &ViewLayout{existing_view_layout.view})
-			layout.root = new_layout
-		} else {
-			panic("no existing view")
-		}
-	} else if layout.selection == layout.root {
+	if layout.selection == layout.root {
 		switch current_node := layout.root.(type) {
 		default:
 			panic("unxpected type")
 		case *ViewLayout:
-			// replace child with a vertical layout that has the child split twice
-			new_layout := &ListLayout{}
+			new_layout := ListLayout{}
 			new_layout.layouts = append(new_layout.layouts, &ViewLayout{current_node.view})
 			new_layout.layouts = append(new_layout.layouts, &ViewLayout{current_node.view})
-			layout.root = new_layout
+			layout.root = &new_layout
 		case *ListLayout:
 			existing_view_layout := findViewLayout(current_node)
-			if existing_view_layout != nil {
-				current_node.layouts = append(current_node.layouts, &ViewLayout{existing_view_layout.view})
-			} else {
+			if existing_view_layout == nil {
 				panic("no existing view")
 			}
+			current_node.layouts = append(current_node.layouts, &ViewLayout{existing_view_layout.view})
 		}
 	} else {
 		splitLayout(layout.root, layout.selection)
 	}
 
 	layout.CalculateRect(layout.rect)
-	layout.selection = layout.Find(loc)
+	layout.selection = layout.FindView(loc)
 }
 
 func (layout *TabLayout) Remove() {
-	loc := Point{layout.selection.Rect().left, layout.selection.Rect().top}
-	removeLayoutNode(layout.root, layout.root, layout.selection)
-	layout.CalculateRect(layout.rect)
-	layout.selection = layout.Find(loc)
+	if layout.selection != layout.root && viewLayoutCount(layout.root) > 1 {
+		loc := Point{layout.selection.Rect().left, layout.selection.Rect().top}
+		removeLayoutNode(layout.root, layout.root, layout.selection)
+		layout.CalculateRect(layout.rect)
+		layout.selection = layout.FindView(loc)
+	}
 }
 
-func (layout *TabLayout) Move(direction Direction) {
+func (layout *TabLayout) Select(direction Direction) {
+	list_selection_layout, is_list_selection := layout.selection.(*ListLayout)
+	if is_list_selection {
+		if len(list_selection_layout.layouts) == 1 {
+			if list_selection_layout == layout.root {
+				layout.root = list_selection_layout.layouts[0] // "fuhget abaht it" -Garbage Collector, Circa 57 BC
+				layout.selection = layout.root
+			} else {
+				// remove the list layout with only 1 element
+				parent := findLayoutParent(layout.root, layout.selection)
+				list_parent := parent.(*ListLayout)
+				for i, child := range list_parent.layouts {
+					if child == layout {
+						list_parent.layouts[i] = list_selection_layout.layouts[0]
+						layout.selection = list_parent.layouts[i]
+						break
+					}
+				}
+			}
+		}
+	}
+
 	switch direction {
 	default:
 		panic("unexpected direction")
@@ -334,9 +346,9 @@ func (layout *TabLayout) Move(direction Direction) {
 		case *ViewLayout:
 			cursor := calc_cursor_on_terminal(current_layout.view.buffer.Cursor(), current_layout.view.scroll,
 				Point{current_layout.view.rect.left, current_layout.view.rect.top})
-			layout.selection = layout.Find(Point{new_x, cursor.y})
+			layout.selection = layout.FindView(Point{new_x, cursor.y})
 		case *ListLayout:
-			layout.selection = layout.Find(Point{new_x, current_layout.Rect().top})
+			layout.selection = layout.FindView(Point{new_x, current_layout.Rect().top})
 		}
 	case DIRECTION_UP:
 		new_y := layout.selection.Rect().top - 2 // account for separator
@@ -350,9 +362,9 @@ func (layout *TabLayout) Move(direction Direction) {
 		case *ViewLayout:
 			cursor := calc_cursor_on_terminal(current_layout.view.buffer.Cursor(), current_layout.view.scroll,
 				Point{current_layout.view.rect.left, current_layout.view.rect.top})
-			layout.selection = layout.Find(Point{cursor.x, new_y})
+			layout.selection = layout.FindView(Point{cursor.x, new_y})
 		case *ListLayout:
-			layout.selection = layout.Find(Point{current_layout.Rect().left, new_y})
+			layout.selection = layout.FindView(Point{current_layout.Rect().left, new_y})
 		}
 	case DIRECTION_RIGHT:
 		new_x := layout.selection.Rect().right + 2 // account for separator
@@ -366,9 +378,9 @@ func (layout *TabLayout) Move(direction Direction) {
 		case *ViewLayout:
 			cursor := calc_cursor_on_terminal(current_layout.view.buffer.Cursor(), current_layout.view.scroll,
 				Point{current_layout.view.rect.left, current_layout.view.rect.top})
-			layout.selection = layout.Find(Point{new_x, cursor.y})
+			layout.selection = layout.FindView(Point{new_x, cursor.y})
 		case *ListLayout:
-			layout.selection = layout.Find(Point{new_x, current_layout.Rect().top})
+			layout.selection = layout.FindView(Point{new_x, current_layout.Rect().top})
 		}
 	case DIRECTION_DOWN:
 		new_y := layout.selection.Rect().bottom + 2 // account for separator
@@ -382,9 +394,9 @@ func (layout *TabLayout) Move(direction Direction) {
 		case *ViewLayout:
 			cursor := calc_cursor_on_terminal(current_layout.view.buffer.Cursor(), current_layout.view.scroll,
 				Point{current_layout.view.rect.left, current_layout.view.rect.top})
-			layout.selection = layout.Find(Point{cursor.x, new_y})
+			layout.selection = layout.FindView(Point{cursor.x, new_y})
 		case *ListLayout:
-			layout.selection = layout.Find(Point{current_layout.Rect().left, new_y})
+			layout.selection = layout.FindView(Point{current_layout.Rect().left, new_y})
 		}
 	case DIRECTION_IN:
 		// find children
@@ -413,24 +425,24 @@ func (layout *TabLayout) PrepareSplit(horizontal bool) {
 
 	new_layout := ListLayout{}
 	new_layout.horizontal = horizontal
+	new_layout.layouts = append(new_layout.layouts, layout.selection)
 	defer func() { layout.selection = &new_layout }()
 
-	new_layout.layouts = append(new_layout.layouts, layout.selection)
-	parent := findLayoutParent(layout.root, layout.selection)
-
-	if parent == nil {
-		// parent is tab layout -> layout
+	if layout.root == layout.selection {
 		layout.root = &new_layout
 		return
 	}
 
+	parent := findLayoutParent(layout.root, layout.selection)
+
 	switch current_parent := parent.(type) {
 	default:
-		log.Fatalf("unexpected type: %T", current_parent)
+		panic("unexpected type")
 	case *ListLayout:
 		for i, view_layout := range current_parent.layouts {
 			if view_layout == layout.selection {
 				current_parent.layouts[i] = &new_layout
+				break
 			}
 		}
 	}
@@ -474,8 +486,8 @@ func (layout *TabListLayout) CalculateRect(rect Rect) {
 	layout.tabs[layout.selection].CalculateRect(rect)
 }
 
-func (layout *TabListLayout) Find(query Point) Layout {
-	return layout.tabs[layout.selection].Find(query)
+func (layout *TabListLayout) FindView(query Point) Layout {
+	return layout.tabs[layout.selection].FindView(query)
 }
 
 func findViewLayout(itr Layout) *ViewLayout {
@@ -503,24 +515,19 @@ func splitLayout(itr Layout, match Layout) {
 	case *ViewLayout:
 		return
 	case *ListLayout:
-		for i, child := range current_node.layouts {
+		for _, child := range current_node.layouts {
 			if child == match {
 				switch current_child := child.(type) {
 				default:
 					panic("unexpected type")
 				case *ViewLayout:
-					// replace child with a vertical layout that has the child split twice
-					new_layout := &ListLayout{}
-					new_layout.layouts = append(new_layout.layouts, &ViewLayout{current_child.view})
-					new_layout.layouts = append(new_layout.layouts, &ViewLayout{current_child.view})
-					current_node.layouts[i] = new_layout
+					current_node.layouts = append(current_node.layouts, &ViewLayout{current_child.view})
 				case *ListLayout:
 					existing_view_layout := findViewLayout(current_child)
-					if existing_view_layout != nil {
-						current_child.layouts = append(current_child.layouts, &ViewLayout{existing_view_layout.view})
-					} else {
+					if existing_view_layout == nil {
 						panic("no existing view")
 					}
+					current_child.layouts = append(current_child.layouts, &ViewLayout{existing_view_layout.view})
 				}
 			} else {
 				splitLayout(child, match)
@@ -560,30 +567,11 @@ func removeLayoutNode(root Layout, itr Layout, match Layout) {
 	case *ListLayout:
 		for i, child := range current_node.layouts {
 			if child == match {
-				if len(current_node.layouts) > 1 {
-					// remove the selection itr
-					current_node.layouts = append(current_node.layouts[:i], current_node.layouts[i+1:]...)
-					// if there is only 1 child left, then collapse it
-					if len(current_node.layouts) == 1 {
-						existing_view_layout := findViewLayout(current_node)
-						if existing_view_layout != nil {
-							new_layout := &ViewLayout{existing_view_layout.view}
-							// replace this noew
-							parent := findLayoutParent(root, itr)
-							if parent != nil {
-								list_layout := parent.(*ListLayout)
-								for i, child := range list_layout.layouts {
-									if child == current_node {
-										list_layout.layouts[i] = new_layout
-									}
-								}
-							}
-						} else {
-							panic("no existing view")
-						}
-					}
-				} else {
-					// we're going to remove the last layout, so just remove this vertical layout
+				// remove the selection itr
+				current_node.layouts = append(current_node.layouts[:i], current_node.layouts[i+1:]...)
+
+				// collapse current list layout if only one is left
+				if len(current_node.layouts) == 0 {
 					removeLayoutNode(root, root, current_node)
 				}
 			} else {
@@ -591,4 +579,20 @@ func removeLayoutNode(root Layout, itr Layout, match Layout) {
 			}
 		}
 	}
+}
+
+func viewLayoutCount(itr Layout) int {
+	switch current_node := itr.(type) {
+	default:
+	case *ViewLayout:
+		return 1
+	case *ListLayout:
+		count := 0
+		for _, child := range current_node.layouts {
+			count += viewLayoutCount(child)
+		}
+		return count
+	}
+
+	return 0
 }
