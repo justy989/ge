@@ -13,6 +13,24 @@ func printLen(toPrint rune, settings *DrawSettings) int {
 	}
 }
 
+func ConvertX(line string, x int, settings *DrawSettings) int {
+	var printCursor int
+	for _, ch := range line {
+		if x <= 0 {
+			break
+		}
+
+		printCursor += printLen(ch, settings)
+
+		x--
+	}
+	return printCursor
+}
+
+func PrintableCursor(buffer Buffer, point Point, settings *DrawSettings) Point {
+	return Point{x: ConvertX(buffer.Lines()[point.y], point.x, settings), y: point.y}
+}
+
 func DrawBuffer(buffer Buffer, view Rect, scroll Point, terminal_dimensions Point, settings *DrawSettings) (err error) {
 	last_row := scroll.y + view.Height()
 	if last_row > len(buffer.Lines()) {
