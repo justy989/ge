@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -72,6 +73,13 @@ func main() {
 	cursor_on_terminal := Point{0, 0}
 	settings := Settings{draw: DrawSettings{4}}
 
+	event_chan := make(chan termbox.Event, 1)
+	go func() {
+		for {
+			event_chan <- termbox.PollEvent()
+		}
+	}()
+
 loop:
 	for {
 		terminal_dimensions.x, terminal_dimensions.y = termbox.Size()
@@ -92,101 +100,107 @@ loop:
 
 		termbox.Flush()
 
-		switch ev := termbox.PollEvent(); ev.Type {
-		case termbox.EventKey:
-			switch ev.Key {
-			case termbox.KeyEsc:
-				break loop
-			case termbox.KeyCtrlJ:
-				current_tab.Select(DIRECTION_DOWN)
-			case termbox.KeyCtrlK:
-				current_tab.Select(DIRECTION_UP)
-			case termbox.KeyCtrlH:
-				current_tab.Select(DIRECTION_LEFT)
-			case termbox.KeyCtrlL:
-				current_tab.Select(DIRECTION_RIGHT)
-			case termbox.KeyCtrlS:
-				current_tab.Split()
-			case termbox.KeyCtrlQ:
-				current_tab.Remove()
-			case termbox.KeyCtrlC:
-				current_tab.Select(DIRECTION_IN)
-			case termbox.KeyCtrlP:
-				current_tab.Select(DIRECTION_OUT)
-			case termbox.KeyCtrlB:
-				current_tab.PrepareSplit(true)
-			case termbox.KeyCtrlV:
-				current_tab.PrepareSplit(false)
-			case termbox.KeyCtrlN:
-				list_layout, is_list_layout := current_tab.selection.(*ListLayout)
-				if is_list_layout {
-					list_layout.SetHorizontal(true)
-					current_tab.CalculateRect(full_view)
-				}
-			case termbox.KeyCtrlM:
-				list_layout, is_list_layout := current_tab.selection.(*ListLayout)
-				if is_list_layout {
-					list_layout.SetHorizontal(false)
-					current_tab.CalculateRect(full_view)
-				}
-			case termbox.KeyCtrlT:
-				new_tab := TabLayout{}
-				new_view_layout := ViewLayout{}
-				new_view_layout.view.buffer = buffers[0]
-				new_tab.root = &new_view_layout
-				new_tab.selection = new_tab.root
-				tabs.tabs = append(tabs.tabs, new_tab)
-			case termbox.KeyCtrlY:
-				tabs.selection++
-				tabs.selection %= len(tabs.tabs)
-				current_tab = &tabs.tabs[tabs.selection]
-			default:
-				if selected_layout_is_view && b != nil {
-					switch ev.Ch {
-					case 'h':
-						selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{-1, 0})
-					case 'l':
-						selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{1, 0})
-					case 'k':
-						selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{0, -1})
-					case 'j':
-						selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{0, 1})
-					case 'G':
-						selected_view_layout.view.cursor = Point{0, len(b.Lines()) - 1}
-						selected_view_layout.view.cursor = ClampOn(b, selected_view_layout.view.cursor)
-					case '$':
-						selected_view_layout.view.cursor = Point{len(b.Lines()[b.Cursor().y]) - 1, b.Cursor().y}
-						selected_view_layout.view.cursor = ClampOn(b, selected_view_layout.view.cursor)
-					case '0':
-						selected_view_layout.view.cursor = Point{0, b.Cursor().y}
-						selected_view_layout.view.cursor = ClampOn(b, selected_view_layout.view.cursor)
-					case 'A':
-						Append(b, 9, "WOAH LOOK AT THIS NEW LINE")
-					case 'I':
-						InsertLine(b, 9, "TESTING")
-					case 'J':
-						Join(b, selected_view_layout.view.cursor.y)
-					case 'd':
-						DeleteLine(b, selected_view_layout.view.cursor.y)
-					case 'u':
-						undoer, ok := b.(Undoer)
-						if ok {
-							undoer.Undo()
-						}
-					case 'r':
-						undoer, ok := b.(Undoer)
-						if ok {
-							undoer.Redo()
+		select {
+		case ev := <-event_chan:
+			switch ev.Type {
+			case termbox.EventKey:
+				switch ev.Key {
+				case termbox.KeyEsc:
+					break loop
+				case termbox.KeyCtrlJ:
+					current_tab.Select(DIRECTION_DOWN)
+				case termbox.KeyCtrlK:
+					current_tab.Select(DIRECTION_UP)
+				case termbox.KeyCtrlH:
+					current_tab.Select(DIRECTION_LEFT)
+				case termbox.KeyCtrlL:
+					current_tab.Select(DIRECTION_RIGHT)
+				case termbox.KeyCtrlS:
+					current_tab.Split()
+				case termbox.KeyCtrlQ:
+					current_tab.Remove()
+				case termbox.KeyCtrlC:
+					current_tab.Select(DIRECTION_IN)
+				case termbox.KeyCtrlP:
+					current_tab.Select(DIRECTION_OUT)
+				case termbox.KeyCtrlB:
+					current_tab.PrepareSplit(true)
+				case termbox.KeyCtrlV:
+					current_tab.PrepareSplit(false)
+				case termbox.KeyCtrlN:
+					list_layout, is_list_layout := current_tab.selection.(*ListLayout)
+					if is_list_layout {
+						list_layout.SetHorizontal(true)
+						current_tab.CalculateRect(full_view)
+					}
+				case termbox.KeyCtrlM:
+					list_layout, is_list_layout := current_tab.selection.(*ListLayout)
+					if is_list_layout {
+						list_layout.SetHorizontal(false)
+						current_tab.CalculateRect(full_view)
+					}
+				case termbox.KeyCtrlT:
+					new_tab := TabLayout{}
+					new_view_layout := ViewLayout{}
+					new_view_layout.view.buffer = buffers[0]
+					new_tab.root = &new_view_layout
+					new_tab.selection = new_tab.root
+					tabs.tabs = append(tabs.tabs, new_tab)
+				case termbox.KeyCtrlY:
+					tabs.selection++
+					tabs.selection %= len(tabs.tabs)
+					current_tab = &tabs.tabs[tabs.selection]
+				default:
+					if selected_layout_is_view && b != nil {
+						switch ev.Ch {
+						case 'h':
+							selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{-1, 0})
+						case 'l':
+							selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{1, 0})
+						case 'k':
+							selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{0, -1})
+						case 'j':
+							selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{0, 1})
+						case 'G':
+							selected_view_layout.view.cursor = Point{0, len(b.Lines()) - 1}
+							selected_view_layout.view.cursor = ClampOn(b, selected_view_layout.view.cursor)
+						case '$':
+							selected_view_layout.view.cursor = Point{len(b.Lines()[b.Cursor().y]) - 1, b.Cursor().y}
+							selected_view_layout.view.cursor = ClampOn(b, selected_view_layout.view.cursor)
+						case '0':
+							selected_view_layout.view.cursor = Point{0, b.Cursor().y}
+							selected_view_layout.view.cursor = ClampOn(b, selected_view_layout.view.cursor)
+						case 'A':
+							Append(b, 9, "WOAH LOOK AT THIS NEW LINE")
+						case 'I':
+							InsertLine(b, 9, "TESTING")
+						case 'J':
+							Join(b, selected_view_layout.view.cursor.y)
+						case 'd':
+							DeleteLine(b, selected_view_layout.view.cursor.y)
+						case 'u':
+							undoer, ok := b.(Undoer)
+							if ok {
+								undoer.Undo()
+							}
+						case 'r':
+							undoer, ok := b.(Undoer)
+							if ok {
+								undoer.Redo()
+							}
 						}
 					}
 				}
-			}
 
-			selected_view_layout, selected_layout_is_view = current_tab.selection.(*ViewLayout)
-			if selected_layout_is_view {
-				selected_view_layout.view.ScrollTo(
-					PrintableCursor(selected_view_layout.view.buffer, selected_view_layout.view.cursor, &settings.draw))
+				selected_view_layout, selected_layout_is_view = current_tab.selection.(*ViewLayout)
+				if selected_layout_is_view {
+					selected_view_layout.view.ScrollTo(
+						PrintableCursor(selected_view_layout.view.buffer, selected_view_layout.view.cursor, &settings.draw))
+				}
+
 			}
+		case <-time.After(time.Millisecond * 500):
+			// re-draw every 500 milliseconds even if we didn't receive a keypress
 		}
 	}
 }
