@@ -13,6 +13,7 @@ func printLen(toPrint rune, settings *DrawSettings) int {
 	}
 }
 
+// TODO: change name of this function
 func ConvertX(line string, x int, settings *DrawSettings) int {
 	var printCursor int
 	for _, ch := range line {
