@@ -70,6 +70,7 @@ func main() {
 
 	// TODO: split layout with buffers that we loaded
 	cursor_on_terminal := Point{0, 0}
+	settings := Settings{draw: DrawSettings{4}}
 
 loop:
 	for {
@@ -77,14 +78,16 @@ loop:
 		termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 		full_view := Rect{0, 0, terminal_dimensions.x, terminal_dimensions.y}
 		tabs.CalculateRect(full_view)
-		tabs.Draw(terminal_dimensions)
+		tabs.Draw(terminal_dimensions, &settings.draw)
 		selected_view_layout, selected_layout_is_view := current_tab.selection.(*ViewLayout)
 		var b Buffer
 		if selected_layout_is_view {
-			cursor_on_terminal = calc_cursor_on_terminal(selected_view_layout.view.cursor, selected_view_layout.view.scroll,
+			b = selected_view_layout.view.buffer
+			cursor_on_terminal = calc_cursor_on_terminal(
+				PrintableCursor(b, selected_view_layout.view.cursor, &settings.draw),
+				selected_view_layout.view.scroll,
 				Point{selected_view_layout.view.rect.left, selected_view_layout.view.rect.top})
 			termbox.SetCursor(cursor_on_terminal.x, cursor_on_terminal.y)
-			b = selected_view_layout.view.buffer
 		}
 
 		termbox.Flush()
@@ -181,7 +184,8 @@ loop:
 
 			selected_view_layout, selected_layout_is_view = current_tab.selection.(*ViewLayout)
 			if selected_layout_is_view {
-				selected_view_layout.view.ScrollTo(selected_view_layout.view.cursor)
+				selected_view_layout.view.ScrollTo(
+					PrintableCursor(selected_view_layout.view.buffer, selected_view_layout.view.cursor, &settings.draw))
 			}
 		}
 	}
