@@ -195,7 +195,7 @@ loop:
 				selected_view_layout, selected_layout_is_view = current_tab.selection.(*ViewLayout)
 				if selected_layout_is_view {
 					selected_view_layout.view.ScrollTo(
-            PrintableCursor(selected_view_layout.view.buffer, selected_view_layout.view.cursor, &settings.draw))
+						PrintableCursor(selected_view_layout.view.buffer, selected_view_layout.view.cursor, &settings.draw))
 				}
 
 			}
