@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"github.com/nsf/termbox-go"
-	"go/ast"
-	"go/parser"
+	"go/scanner"
 	"go/token"
+	"go/types"
+	//"log"
 )
 
 func printLen(toPrint rune, settings *DrawSettings) int {
@@ -45,9 +47,9 @@ type GoSyntax struct {
 	bgColors [][]termbox.Attribute
 }
 
-func (syntax *GoSyntax) highlightRange(start token.Position, end token.Position, fgColor termbox.Attribute, bgColor termbox.Attribute) {
+func (syntax *GoSyntax) highlightRange(lit string, start token.Position, end token.Position, fgColor termbox.Attribute, bgColor termbox.Attribute) {
 	for row := start.Line; row <= end.Line; row++ {
-		curLine := syntax.buffer.Lines()[row-1]
+		curLine := []rune(syntax.buffer.Lines()[row-1])
 		var startColumn, endColumn int
 		if row == start.Line {
 			startColumn = start.Column
@@ -83,60 +85,66 @@ func NewHighlighter(buffer Buffer) Highlighter {
 	}
 
 	fset := token.NewFileSet() // positions are relative to fset
-	// TODO: send the bytes from our buffer into ParseFile
-	f, err := parser.ParseFile(fset, "buffer.go", nil, parser.ParseComments|parser.AllErrors)
-	if err != nil {
-		panic(err)
-		return syntax
+	src := buffer.(fmt.Stringer).String()
+	f := fset.AddFile("", fset.Base(), len(src))
+	var s scanner.Scanner
+	s.Init(f, []byte(src), nil /* no error handler. TODO: implement one! */, scanner.ScanComments)
+	isGoType := func(t string) bool {
+		for _, basic := range types.Typ {
+			if t == basic.Name() {
+				return true
+			}
+		}
+		return false
 	}
-	ast.Inspect(f, func(n ast.Node) bool {
-		if n == nil {
-			return true
+
+	// Repeated calls to Scan yield the token sequence found in the input.
+	for {
+		pos, tok, lit := s.Scan()
+		if tok == token.EOF {
+			break
+		}
+		if pos == token.NoPos {
+			panic("aghh")
 		}
 		fgColor := termbox.ColorDefault
 		bgColor := termbox.ColorDefault
-		start := fset.Position(n.Pos())
-		end := fset.Position(n.End())
-		switch x := n.(type) {
-		case *ast.BasicLit:
-			switch x.Kind {
-			case token.INT:
-				// print purple
-				fgColor = termbox.ColorMagenta
-			case token.FLOAT:
-				fgColor = termbox.ColorMagenta
-			case token.IMAG:
-				fgColor = termbox.ColorMagenta
-			case token.CHAR:
-				fgColor = termbox.ColorRed
-			case token.STRING:
-				// print red
-				fgColor = termbox.ColorRed
-			}
-		case *ast.Ident:
-			if x.Obj != nil {
-				switch x.Obj.Kind {
-				case ast.Typ:
-				case ast.Fun:
-				}
-			}
-		case *ast.Comment:
+		start := fset.Position(pos)
+		end := start
+		end.Column += len(lit)
+
+		if len(lit) != len([]rune(lit)) {
+			// TODO: convert start and end column byte positions to rune positions
+			panic("we haven't supported unicode in syntax highlighting yet!")
+			continue // skip the line
+		}
+
+		switch {
+		case tok == token.COMMENT:
 			fgColor = termbox.ColorGreen
-		case *ast.GenDecl:
-			start = fset.Position(x.TokPos)
-			end = fset.Position(x.TokPos)
-			end.Column += len(x.Tok.String())
+		case tok == token.STRING:
+			fallthrough
+		case tok == token.CHAR:
+			fgColor = termbox.ColorRed
+		case tok == token.IMAG:
+			fallthrough
+		case tok == token.FLOAT:
+			fallthrough
+		case tok == token.INT:
+			fgColor = termbox.ColorMagenta
+		case tok == token.RETURN:
+			fgColor = termbox.ColorYellow
+		case tok.IsKeyword():
 			fgColor = termbox.ColorBlue
-		case *ast.IfStmt:
-			fgColor = termbox.ColorBlue
-		case *ast.CaseClause:
+		case lit == "nil":
+			fgColor = termbox.ColorRed
+		case isGoType(lit):
 			fgColor = termbox.ColorBlue
 		default:
-			return true
+			continue
 		}
-		syntax.highlightRange(start, end, fgColor, bgColor)
-		return true
-	})
+		syntax.highlightRange(lit, start, end, fgColor, bgColor)
+	}
 
 	return syntax
 }
