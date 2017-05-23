@@ -53,7 +53,7 @@ type changeGroup struct {
 // 3. commit change (note: record cursor here too)
 
 func (buffer *undoBuffer) String() string {
-	return Stringify_buffer(buffer)
+	return StringifyBuffer(buffer)
 }
 
 func (buffer *undoBuffer) Undo() (err error) {
