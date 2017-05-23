@@ -49,22 +49,31 @@ type GoSyntax struct {
 
 func (syntax *GoSyntax) highlightRange(lit string, start token.Position, end token.Position, fgColor termbox.Attribute, bgColor termbox.Attribute) {
 	for row := start.Line; row <= end.Line; row++ {
-		curLine := []rune(syntax.buffer.Lines()[row-1])
-		var startColumn, endColumn int
+		var startColumn int
+
 		if row == start.Line {
 			startColumn = start.Column
 		} else {
 			startColumn = 1
 		}
-		if row == end.Line {
-			endColumn = end.Column
-		} else {
-			endColumn = len(curLine)
-		}
 
-		for i := startColumn; i < endColumn; i++ {
-			syntax.fgColors[row-1][i-1] = fgColor
-			syntax.bgColors[row-1][i-1] = bgColor
+		var runeIx int
+		for x := range syntax.buffer.Lines()[row-1] {
+			if startColumn-1 > x {
+				// we haven't starting highlighting yet
+				runeIx++
+				continue
+			}
+
+			if row == end.Line && end.Column-1 == x {
+				// we are done highlighting
+				break
+			}
+
+			syntax.fgColors[row-1][runeIx] = fgColor
+			syntax.bgColors[row-1][runeIx] = bgColor
+
+			runeIx++
 		}
 	}
 }
@@ -112,12 +121,6 @@ func NewHighlighter(buffer Buffer) Highlighter {
 		start := fset.Position(pos)
 		end := start
 		end.Column += len(lit)
-
-		if len(lit) != len([]rune(lit)) {
-			// TODO: convert start and end column byte positions to rune positions
-			panic("we haven't supported unicode in syntax highlighting yet!")
-			continue // skip the line
-		}
 
 		switch {
 		case tok == token.COMMENT:
