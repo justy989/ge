@@ -44,16 +44,16 @@ type BaseBuffer struct {
 }
 
 // generalized function to stringify a buffer
-func stringify_buffer(buffer Buffer) string {
+func StringifyBuffer(buffer Buffer) string {
 	var b bytes.Buffer
 	for _, line := range buffer.Lines() {
-		b.WriteString(line + "\\n")
+		b.WriteString(line + "\n")
 	}
 	return b.String()
 }
 
 func (buffer *BaseBuffer) String() string {
-	return stringify_buffer(buffer)
+	return StringifyBuffer(buffer)
 }
 
 func (buffer *BaseBuffer) Write(bytes []byte) (int, error) {

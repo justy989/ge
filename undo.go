@@ -52,6 +52,10 @@ type changeGroup struct {
 // 2. make changes (insertline, setline, deleteline, appendline)
 // 3. commit change (note: record cursor here too)
 
+func (buffer *undoBuffer) String() string {
+	return StringifyBuffer(buffer)
+}
+
 func (buffer *undoBuffer) Undo() (err error) {
 	if buffer.changeIndex < 0 {
 		// nothing to undo
