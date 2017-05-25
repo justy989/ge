@@ -15,10 +15,18 @@ import (
 func main() {
 	flag.Parse()
 	files := flag.Args()
+	logfile, err := os.OpenFile("ge.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
+	if err != nil {
+		log.Fatalf("Open(ge.log) error: %v", err)
+	}
+
+	defer logfile.Close()
+	log.SetOutput(logfile)
+
 	var buffers []Buffer
 	for _, file := range files {
 		var f io.Reader
-		f, err := os.Open(file)
+		f, err = os.Open(file)
 		if err != nil {
 			log.Fatalf("Open() error: %v", err)
 		}
@@ -52,7 +60,7 @@ func main() {
 		panic("Ahhh you didn't load any buffers. We should be able to handle this eventually")
 	}
 
-	err := termbox.Init()
+	err = termbox.Init()
 	if err != nil {
 		return
 	}
