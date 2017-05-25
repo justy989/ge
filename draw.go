@@ -6,6 +6,7 @@ import (
 	"go/scanner"
 	"go/token"
 	"go/types"
+	"unicode/utf8"
 	//"log"
 )
 
@@ -41,13 +42,17 @@ type Highlighter interface {
 	Highlight(point Point) (fgColor termbox.Attribute, bgColor termbox.Attribute)
 }
 
-type GoSyntax struct {
-	buffer   Buffer
-	fgColors [][]termbox.Attribute
-	bgColors [][]termbox.Attribute
+type termColor struct {
+	fg termbox.Attribute
+	bg termbox.Attribute
 }
 
-func (syntax *GoSyntax) highlightRange(lit string, start token.Position, end token.Position, fgColor termbox.Attribute, bgColor termbox.Attribute) {
+type GoSyntax struct {
+	buffer Buffer
+	Colors [][]termColor
+}
+
+func (syntax *GoSyntax) highlightRange(lit string, start token.Position, end token.Position, color termColor) {
 	for row := start.Line; row <= end.Line; row++ {
 		var startColumn int
 
@@ -70,8 +75,7 @@ func (syntax *GoSyntax) highlightRange(lit string, start token.Position, end tok
 				break
 			}
 
-			syntax.fgColors[row-1][runeIx] = fgColor
-			syntax.bgColors[row-1][runeIx] = bgColor
+			syntax.Colors[row-1][runeIx] = color
 
 			runeIx++
 		}
@@ -80,17 +84,10 @@ func (syntax *GoSyntax) highlightRange(lit string, start token.Position, end tok
 
 func NewHighlighter(buffer Buffer) Highlighter {
 	syntax := &GoSyntax{buffer: buffer}
-	syntax.fgColors = make([][]termbox.Attribute, len(buffer.Lines()))
-	syntax.bgColors = make([][]termbox.Attribute, len(buffer.Lines()))
+	syntax.Colors = make([][]termColor, len(buffer.Lines()))
 	for y, lineBytes := range buffer.Lines() {
-		line := []rune(lineBytes)
-		syntax.fgColors[y] = make([]termbox.Attribute, len(line))
-		syntax.bgColors[y] = make([]termbox.Attribute, len(line))
-
-		for x := range line {
-			syntax.fgColors[y][x] = termbox.ColorDefault
-			syntax.bgColors[y][x] = termbox.ColorDefault
-		}
+		lineLen := utf8.RuneCountInString(lineBytes)
+		syntax.Colors[y] = make([]termColor, lineLen)
 	}
 
 	fset := token.NewFileSet() // positions are relative to fset
@@ -98,13 +95,15 @@ func NewHighlighter(buffer Buffer) Highlighter {
 	f := fset.AddFile("", fset.Base(), len(src))
 	var s scanner.Scanner
 	s.Init(f, []byte(src), nil /* no error handler. TODO: implement one! */, scanner.ScanComments)
+	goTypes := make(map[string]struct{})
+	for _, basic := range types.Typ {
+		// add empty struct to map
+		goTypes[basic.Name()] = struct{}{}
+	}
+
 	isGoType := func(t string) bool {
-		for _, basic := range types.Typ {
-			if t == basic.Name() {
-				return true
-			}
-		}
-		return false
+		_, ok := goTypes[t]
+		return ok
 	}
 
 	// Repeated calls to Scan yield the token sequence found in the input.
@@ -116,44 +115,43 @@ func NewHighlighter(buffer Buffer) Highlighter {
 		if pos == token.NoPos {
 			panic("aghh")
 		}
-		fgColor := termbox.ColorDefault
-		bgColor := termbox.ColorDefault
+		color := termColor{}
 		start := fset.Position(pos)
 		end := start
 		end.Column += len(lit)
 
 		switch {
 		case tok == token.COMMENT:
-			fgColor = termbox.ColorGreen
+			color.fg = termbox.ColorGreen
 		case tok == token.STRING:
 			fallthrough
 		case tok == token.CHAR:
-			fgColor = termbox.ColorRed
+			color.fg = termbox.ColorRed
 		case tok == token.IMAG:
 			fallthrough
 		case tok == token.FLOAT:
 			fallthrough
 		case tok == token.INT:
-			fgColor = termbox.ColorMagenta
+			color.fg = termbox.ColorMagenta
 		case tok == token.RETURN:
-			fgColor = termbox.ColorYellow
+			color.fg = termbox.ColorYellow
 		case tok.IsKeyword():
-			fgColor = termbox.ColorBlue
+			color.fg = termbox.ColorBlue
 		case lit == "nil":
-			fgColor = termbox.ColorRed
+			color.fg = termbox.ColorRed
 		case isGoType(lit):
-			fgColor = termbox.ColorBlue
+			color.fg = termbox.ColorBlue
 		default:
 			continue
 		}
-		syntax.highlightRange(lit, start, end, fgColor, bgColor)
+		syntax.highlightRange(lit, start, end, color)
 	}
 
 	return syntax
 }
 
 func (syntax *GoSyntax) Highlight(point Point) (termbox.Attribute, termbox.Attribute) {
-	return syntax.fgColors[point.y][point.x], syntax.bgColors[point.y][point.x]
+	return syntax.Colors[point.y][point.x].fg, syntax.Colors[point.y][point.x].bg
 }
 
 func DrawBuffer(buffer Buffer, view Rect, scroll Point, terminal_dimensions Point, settings *DrawSettings) (err error) {
