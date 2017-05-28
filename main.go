@@ -148,9 +148,9 @@ loop:
 					default:
 						state, action := vim.ParseAction(ev.Ch)
 						if state == PARSE_ACTION_STATE_COMPLETE {
-							success, new_cursor := vim.Perform(action, b, selected_view_layout.view.cursor)
-							if success {
-								selected_view_layout.view.cursor = new_cursor
+							err := vim.Perform(&action, b)
+							if err == nil {
+								selected_view_layout.view.cursor = b.Cursor()
 							}
 						}
 					case 'G':

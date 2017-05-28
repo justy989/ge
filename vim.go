@@ -1,10 +1,12 @@
 package main
 
+// NOTE: idea for custom go motion: like j or k but combine them with an action, 3Md deletes 3 lines above and 3 lines below
+
 type Mode int
-type VerbType int
-type MotionType int
 type ParseActionState int
-type VimKeyFunc func(*Action) ParseActionState
+type ParseFunc func(*Action) ParseActionState
+type MotionFunc func(*Vim, *Action, Buffer) (Point, Point)
+type VerbFunc func(*Vim, Buffer, Point, Point) error
 
 const (
 	MODE_NORMAL Mode = iota
@@ -16,184 +18,134 @@ const (
 )
 
 const (
-	VERB_TYPE_NONE VerbType = iota
-	VERB_TYPE_MOTION
-	VERB_TYPE_DELETE
-	VERB_TYPE_CHANGE_CHAR
-	VERB_TYPE_PASTE_BEFORE
-	VERB_TYPE_PASTE_AFTER
-	VERB_TYPE_YANK
-	VERB_TYPE_INDENT
-	VERB_TYPE_UNINDENT
-	VERB_TYPE_COMMENT
-	VERB_TYPE_UNCOMMENT
-	VERB_TYPE_FLIP_CASE
-	VERB_TYPE_JOIN_LINE
-	VERB_TYPE_OPEN_ABOVE
-	VERB_TYPE_OPEN_BELOW
-	VERB_TYPE_SET_MARK
-	VERB_TYPE_RECORD_MACRO
-	VERB_TYPE_PLAY_MACRO
-	VERB_TYPE_SUBSTITUTE
-)
-
-const (
-	MOTION_TYPE_NONE MotionType = iota
-	MOTION_TYPE_LEFT
-	MOTION_TYPE_RIGHT
-	MOTION_TYPE_UP
-	MOTION_TYPE_DOWN
-	MOTION_TYPE_WORD_LITTLE
-	MOTION_TYPE_WORD_BIG
-	MOTION_TYPE_WORD_BEGINNING_LITTLE
-	MOTION_TYPE_WORD_BEGINNING_BIG
-	MOTION_TYPE_WORD_END_LITTLE
-	MOTION_TYPE_WORD_END_BIG
-	MOTION_TYPE_LINE
-	MOTION_TYPE_LINE_UP
-	MOTION_TYPE_LINE_DOWN
-	MOTION_TYPE_FIND_NEXT_MATCHING_CHAR
-	MOTION_TYPE_FIND_PREV_MATCHING_CHAR
-	MOTION_TYPE_LINE_SOFT
-	MOTION_TYPE_TO_NEXT_MATCHING_CHAR
-	MOTION_TYPE_TO_PREV_MATCHING_CHAR
-	MOTION_TYPE_BEGINNING_OF_FILE
-	MOTION_TYPE_BEGINNING_OF_LINE_HARD
-	MOTION_TYPE_BEGINNING_OF_LINE_SOFT
-	MOTION_TYPE_END_OF_LINE_PASSED
-	MOTION_TYPE_END_OF_LINE_HARD
-	MOTION_TYPE_END_OF_LINE_SOFT
-	MOTION_TYPE_END_OF_FILE
-	MOTION_TYPE_INSIDE_PAIR
-	MOTION_TYPE_INSIDE_WORD_LITTLE
-	MOTION_TYPE_INSIDE_WORD_BIG
-	MOTION_TYPE_AROUND_PAIR
-	MOTION_TYPE_AROUND_WORD_LITTLE
-	MOTION_TYPE_AROUND_WORD_BIG
-	MOTION_TYPE_VISUAL_RANGE
-	MOTION_TYPE_VISUAL_LINE
-	MOTION_TYPE_VISUAL_SWAP_WITH_CURSOR
-	MOTION_TYPE_SEARCH_WORD_UNDER_CURSOR
-	MOTION_TYPE_SEARCH
-	MOTION_TYPE_MATCHING_PAIR
-	MOTION_TYPE_NEXT_BLANK_LINE
-	MOTION_TYPE_PREV_BLANK_LINE
-	MOTION_TYPE_GOTO_MARK
-)
-
-const (
 	PARSE_ACTION_STATE_INVALID ParseActionState = iota
+	PARSE_ACTION_STATE_KEY_NOT_HANDLED
+	PARSE_ACTION_STATE_CONSUME_ADDITIONAL_KEY
 	PARSE_ACTION_STATE_IN_PROGRESS
 	PARSE_ACTION_STATE_COMPLETE
 )
 
-type VimKey struct {
-	function VimKeyFunc
+type KeyBind struct {
+	function ParseFunc
 	key      rune
 }
 
 type Verb struct {
-	verb_type   VerbType
-	string_data string
-	int_data    int
+	function VerbFunc
+	param    string
 }
 
 type Motion struct {
-	motion_type MotionType
-	multiplier  int
-	int_data    int
+	function   MotionFunc
+	multiplier int
+	param      string
 }
 
 type Action struct {
-	multiplier  int
-	motion      Motion
-	verb        Verb
-	end_in_mode Mode
-	yank        bool
+	multiplier int
+	motion     Motion
+	verb       Verb
+	final_mode Mode
+	yank       bool
 }
 
 type Vim struct {
 	mode    Mode
 	command []rune
-	keys    []VimKey
+	binds   []KeyBind
 }
 
 func (vim *Vim) init() {
-	vim.keys = append(vim.keys, VimKey{key: 'h', function: motionLeft})
-	vim.keys = append(vim.keys, VimKey{key: 'l', function: motionRight})
-	vim.keys = append(vim.keys, VimKey{key: 'j', function: motionDown})
-	vim.keys = append(vim.keys, VimKey{key: 'k', function: motionUp})
+	vim.binds = append(vim.binds, KeyBind{key: 'h', function: parseMotionLeft})
+	vim.binds = append(vim.binds, KeyBind{key: 'l', function: parseMotionRight})
+	vim.binds = append(vim.binds, KeyBind{key: 'j', function: parseMotionDown})
+	vim.binds = append(vim.binds, KeyBind{key: 'k', function: parseMotionUp})
 }
 
 func (vim *Vim) ParseAction(key rune) (state ParseActionState, action Action) {
-	state = PARSE_ACTION_STATE_INVALID
+	action.multiplier = 1
+	action.motion.multiplier = 1
+	vim.command = append(vim.command, key)
 
-	// parse the previous commands
+	// parse the commands
 	for _, command_key := range vim.command {
-		for _, vim_key := range vim.keys {
-			if vim_key.key == command_key {
-				state = vim_key.function(&action)
-				break
+		state = PARSE_ACTION_STATE_INVALID
+
+		for _, bind := range vim.binds {
+			if bind.key == command_key {
+				state = bind.function(&action)
+
+				switch state {
+				default:
+				case PARSE_ACTION_STATE_INVALID:
+				case PARSE_ACTION_STATE_COMPLETE:
+					vim.command = []rune{}
+					return state, action
+				}
 			}
 		}
-	}
-
-	// parse the current command
-	for _, vim_key := range vim.keys {
-		if vim_key.key == key {
-			state = vim_key.function(&action)
-			break
-		}
-	}
-
-	// based on the state, append the key or clear the command
-	switch state {
-	default:
-	case PARSE_ACTION_STATE_IN_PROGRESS:
-		vim.command = append(vim.command, key)
-	case PARSE_ACTION_STATE_COMPLETE:
-		vim.command = []rune{}
 	}
 
 	return state, action
 }
 
-func (vim *Vim) Perform(action Action, buffer Buffer, cursor Point) (bool, Point) {
-	switch action.motion.motion_type {
-	default:
-	case MOTION_TYPE_LEFT:
-		cursor = MoveCursor(buffer, cursor, Point{-1, 0})
-		return true, cursor
-	case MOTION_TYPE_RIGHT:
-		cursor = MoveCursor(buffer, cursor, Point{1, 0})
-		return true, cursor
-	case MOTION_TYPE_UP:
-		cursor = MoveCursor(buffer, cursor, Point{0, -1})
-		return true, cursor
-	case MOTION_TYPE_DOWN:
-		cursor = MoveCursor(buffer, cursor, Point{0, 1})
-		return true, cursor
-	}
-
-	return false, Point{0, 0}
+func (vim *Vim) Perform(action *Action, buffer Buffer) (err error) {
+	start, end := action.motion.function(vim, action, buffer)
+	return action.verb.function(vim, buffer, start, end)
 }
 
-func motionLeft(action *Action) ParseActionState {
-	action.motion.motion_type = MOTION_TYPE_LEFT
+// parse functions
+func parseMotionLeft(action *Action) ParseActionState {
+	action.motion.function = motionLeft
+	action.verb.function = verbMotion
 	return PARSE_ACTION_STATE_COMPLETE
 }
 
-func motionRight(action *Action) ParseActionState {
-	action.motion.motion_type = MOTION_TYPE_RIGHT
+func parseMotionRight(action *Action) ParseActionState {
+	action.motion.function = motionRight
+	action.verb.function = verbMotion
 	return PARSE_ACTION_STATE_COMPLETE
 }
 
-func motionUp(action *Action) ParseActionState {
-	action.motion.motion_type = MOTION_TYPE_UP
+func parseMotionUp(action *Action) ParseActionState {
+	action.motion.function = motionUp
+	action.verb.function = verbMotion
 	return PARSE_ACTION_STATE_COMPLETE
 }
 
-func motionDown(action *Action) ParseActionState {
-	action.motion.motion_type = MOTION_TYPE_DOWN
+func parseMotionDown(action *Action) ParseActionState {
+	action.motion.function = motionDown
+	action.verb.function = verbMotion
 	return PARSE_ACTION_STATE_COMPLETE
+}
+
+// motion functions
+func motionLeft(vim *Vim, action *Action, buffer Buffer) (start Point, end Point) {
+	start = buffer.Cursor()
+	end = MoveCursor(buffer, start, Point{-1, 0})
+	return start, end
+}
+
+func motionRight(vim *Vim, action *Action, buffer Buffer) (start Point, end Point) {
+	start = buffer.Cursor()
+	end = MoveCursor(buffer, start, Point{1, 0})
+	return start, end
+}
+
+func motionUp(vim *Vim, action *Action, buffer Buffer) (start Point, end Point) {
+	start = buffer.Cursor()
+	end = MoveCursor(buffer, start, Point{0, -1})
+	return start, end
+}
+
+func motionDown(vim *Vim, action *Action, buffer Buffer) (start Point, end Point) {
+	start = buffer.Cursor()
+	end = MoveCursor(buffer, start, Point{0, 1})
+	return start, end
+}
+
+// verb functions
+func verbMotion(vim *Vim, buffer Buffer, start Point, end Point) error {
+	buffer.SetCursor(end)
+	return nil
 }
