@@ -1,12 +1,14 @@
 package main
 
+import "reflect"
+
 // NOTE: idea for custom go motion: like j or k but combine them with an action, 3Md deletes 3 lines above and 3 lines below
 
 type Mode int
 type ParseActionState int
 type ParseFunc func(*Action) ParseActionState
-type MotionFunc func(*Vim, *Action, Buffer) (Point, Point)
-type VerbFunc func(*Vim, Buffer, Point, Point) error
+type MotionFunc func(*Vim, *Action, Buffer) (Range)
+type VerbFunc func(*Vim, Buffer, Range) (error)
 
 const (
 	MODE_NORMAL Mode = iota
@@ -55,11 +57,22 @@ type Vim struct {
 	binds   []KeyBind
 }
 
+type Range struct {
+     start Point
+     end   Point
+}
+
+type Span struct {
+     start int
+     end   int
+}
+
 func (vim *Vim) init() {
 	vim.binds = append(vim.binds, KeyBind{key: 'h', function: parseMotionLeft})
 	vim.binds = append(vim.binds, KeyBind{key: 'l', function: parseMotionRight})
 	vim.binds = append(vim.binds, KeyBind{key: 'j', function: parseMotionDown})
 	vim.binds = append(vim.binds, KeyBind{key: 'k', function: parseMotionUp})
+	vim.binds = append(vim.binds, KeyBind{key: 'd', function: parseVerbDelete})
 }
 
 func (vim *Vim) ParseAction(key rune) (state ParseActionState, action Action) {
@@ -82,70 +95,193 @@ func (vim *Vim) ParseAction(key rune) (state ParseActionState, action Action) {
 					vim.command = []rune{}
 					return state, action
 				}
+
+                    break
 			}
 		}
+
+          if state == PARSE_ACTION_STATE_INVALID {
+               vim.command = []rune{}
+               return state, action
+          }
 	}
 
 	return state, action
 }
 
 func (vim *Vim) Perform(action *Action, buffer Buffer) (err error) {
-	start, end := action.motion.function(vim, action, buffer)
-	return action.verb.function(vim, buffer, start, end)
+	r := action.motion.function(vim, action, buffer)
+	return action.verb.function(vim, buffer, r)
+}
+
+func (r *Range) Sort() {
+     if r.start.IsAfter(r.end){
+          tmp := r.start
+          r.start = r.end
+          r.end = tmp
+     }
 }
 
 // parse functions
 func parseMotionLeft(action *Action) ParseActionState {
 	action.motion.function = motionLeft
-	action.verb.function = verbMotion
+	if action.verb.function == nil {
+          action.verb.function = verbMotion
+     }
 	return PARSE_ACTION_STATE_COMPLETE
 }
 
 func parseMotionRight(action *Action) ParseActionState {
 	action.motion.function = motionRight
-	action.verb.function = verbMotion
+	if action.verb.function == nil {
+          action.verb.function = verbMotion
+     }
 	return PARSE_ACTION_STATE_COMPLETE
 }
 
 func parseMotionUp(action *Action) ParseActionState {
 	action.motion.function = motionUp
-	action.verb.function = verbMotion
+	if action.verb.function == nil {
+          action.verb.function = verbMotion
+     }
 	return PARSE_ACTION_STATE_COMPLETE
 }
 
 func parseMotionDown(action *Action) ParseActionState {
 	action.motion.function = motionDown
-	action.verb.function = verbMotion
+	if action.verb.function == nil {
+          action.verb.function = verbMotion
+     }
+	return PARSE_ACTION_STATE_COMPLETE
+}
+
+func parseVerbDelete(action *Action) ParseActionState {
+     if action.verb.function == nil {
+          action.verb.function = verbDelete
+          return PARSE_ACTION_STATE_IN_PROGRESS
+     } else {
+          action.motion.function = motionCurrentLine
+     }
+
 	return PARSE_ACTION_STATE_COMPLETE
 }
 
 // motion functions
-func motionLeft(vim *Vim, action *Action, buffer Buffer) (start Point, end Point) {
-	start = buffer.Cursor()
-	end = MoveCursor(buffer, start, Point{-1, 0})
-	return start, end
+func motionLeft(vim *Vim, action *Action, buffer Buffer) (r Range) {
+	r.start = buffer.Cursor()
+	r.end = MoveCursor(buffer, r.start, Point{-1, 0})
+	return r
 }
 
-func motionRight(vim *Vim, action *Action, buffer Buffer) (start Point, end Point) {
-	start = buffer.Cursor()
-	end = MoveCursor(buffer, start, Point{1, 0})
-	return start, end
+func motionRight(vim *Vim, action *Action, buffer Buffer) (r Range) {
+	r.start = buffer.Cursor()
+	r.end = MoveCursor(buffer, r.start, Point{1, 0})
+	return r
 }
 
-func motionUp(vim *Vim, action *Action, buffer Buffer) (start Point, end Point) {
-	start = buffer.Cursor()
-	end = MoveCursor(buffer, start, Point{0, -1})
-	return start, end
+func motionUp(vim *Vim, action *Action, buffer Buffer) (r Range) {
+     r.start = buffer.Cursor()
+     aF := reflect.ValueOf(verbMotion)
+     bF := reflect.ValueOf(action.verb.function)
+     if aF.Pointer() == bF.Pointer() {
+          r.end = MoveCursor(buffer, r.start, Point{0, -1})
+     } else {
+          r.start.x = stringLastIndex(buffer.Lines()[r.start.y]);
+          r.end.y = r.start.y - 1
+          r.end.x = 0
+     }
+	return r
 }
 
-func motionDown(vim *Vim, action *Action, buffer Buffer) (start Point, end Point) {
-	start = buffer.Cursor()
-	end = MoveCursor(buffer, start, Point{0, 1})
-	return start, end
+func motionDown(vim *Vim, action *Action, buffer Buffer) (r Range) {
+     r.start = buffer.Cursor()
+     aF := reflect.ValueOf(verbMotion)
+     bF := reflect.ValueOf(action.verb.function)
+     if aF.Pointer() == bF.Pointer() {
+          r.end = MoveCursor(buffer, r.start, Point{0, 1})
+     } else {
+          r.start.x = 0;
+          r.end.y = r.start.y + 1
+          r.end.x = stringLastIndex(buffer.Lines()[r.end.y])
+     }
+	return r
+}
+
+func motionCurrentLine(vim *Vim, action *Action, buffer Buffer) (r Range) {
+     line := buffer.Cursor().y
+	r.start = Point{0, line}
+	r.end = Point{stringLastIndex(buffer.Lines()[line]), line}
+	return r
 }
 
 // verb functions
-func verbMotion(vim *Vim, buffer Buffer, start Point, end Point) error {
-	buffer.SetCursor(end)
-	return nil
+func verbMotion(vim *Vim, buffer Buffer, r Range) (err error) {
+	buffer.SetCursor(r.end)
+	return
+}
+
+func verbDelete(vim *Vim, buffer Buffer, r Range) (err error) {
+     var spans []Span
+
+     // calculate where the cursor will end, don't move it unless we are deleting up
+     end_cursor := buffer.Cursor()
+     if end_cursor.IsAfter(r.end) {
+          end_cursor.y = r.end.y
+          if r.start.y == r.end.y {
+               end_cursor.x = r.end.x
+          }
+     }
+
+     r.Sort()
+
+     // find line spans
+     for l := r.start.y; l <= r.end.y; l++ {
+          var span Span
+
+          // if we are on the starting line, use start.x, otherwise use the beginning of the line
+          if l == r.start.y {
+               span.start = r.start.x
+          } else {
+               span.start = 0
+          }
+
+          // if we are on the ending line, use end.x, otherwise use the end of the line
+          if l == r.end.y {
+               span.end = r.end.x
+          } else {
+               span.end = stringLastIndex(buffer.Lines()[l])
+          }
+
+          spans = append(spans, span)
+     }
+
+     // set line or delete line for each span
+     deleted_lines := 0
+     for i, span := range(spans) {
+          line_index := r.start.y + i - deleted_lines
+
+          if span.start == 0 && span.end == stringLastIndex(buffer.Lines()[line_index]) {
+               // delete line_index
+               DeleteLine(buffer, line_index)
+               deleted_lines += 1
+          } else {
+               // set line
+               line := buffer.Lines()[line_index]
+               new_line := line[0:span.start] + line[span.end:len(line)]
+               SetLine(buffer, line_index, new_line)
+          }
+     }
+
+     // update the cursor
+     buffer.SetCursor(ClampIn(buffer, end_cursor))
+	return
+}
+
+// helpers
+func stringLastIndex(str string) (index int) {
+     result := len(str)
+     if result > 0 {
+          result -= 1
+     }
+     return result
 }
