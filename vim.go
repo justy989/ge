@@ -261,11 +261,11 @@ func verbDelete(vim *Vim, buffer Buffer, r Range) (err error) {
           line_index := r.start.y + i - deleted_lines
 
           if span.start == 0 && span.end == stringLastIndex(buffer.Lines()[line_index]) {
-               // delete line_index
+               // the range included the entire line, so just remove it
                DeleteLine(buffer, line_index)
                deleted_lines += 1
           } else {
-               // set line
+               // just delete a range of characters within the line
                line := buffer.Lines()[line_index]
                new_line := line[0:span.start] + line[span.end:len(line)]
                SetLine(buffer, line_index, new_line)
