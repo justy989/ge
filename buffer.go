@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"errors"
-	"github.com/nsf/termbox-go"
 	"io"
 	"strings"
 )
@@ -30,7 +29,6 @@ type Buffer interface {
 	SetCursor(location Point) (err error)
 	Cursor() (cursor Point)
 	//MoveCursor(cursor Point, delta Point) (cursor Point) TODO: ADD THIS FOR SURESIES
-	Draw(view Rect, scroll Point, terminal_dimensions Point) (err error)
 	//Save() (err error)
 }
 
@@ -46,16 +44,16 @@ type BaseBuffer struct {
 }
 
 // generalized function to stringify a buffer
-func stringify_buffer(buffer Buffer) string {
+func StringifyBuffer(buffer Buffer) string {
 	var b bytes.Buffer
 	for _, line := range buffer.Lines() {
-		b.WriteString(line + "\\n")
+		b.WriteString(line + "\n")
 	}
 	return b.String()
 }
 
 func (buffer *BaseBuffer) String() string {
-	return stringify_buffer(buffer)
+	return StringifyBuffer(buffer)
 }
 
 func (buffer *BaseBuffer) Write(bytes []byte) (int, error) {
@@ -162,48 +160,6 @@ func (buffer *BaseBuffer) DeleteLine(lineIndex int) (err error) {
 // clears all lines from the buffer
 func (buffer *BaseBuffer) Clear() (err error) {
 	buffer.lines = []string{}
-	return
-}
-
-func (buffer *BaseBuffer) Draw(view Rect, scroll Point, terminal_dimensions Point) (err error) {
-	last_row := scroll.y + view.Height()
-	if last_row > len(buffer.lines) {
-		last_row = len(buffer.lines)
-	}
-
-	max_col := scroll.x + view.Width()
-	for y, line := range buffer.lines[scroll.y:last_row] {
-		if y >= view.Height() {
-			break
-		}
-
-		last_col := max_col
-		if last_col > len(line) {
-			last_col = len(line)
-		}
-
-		if scroll.x > last_col {
-			continue
-		}
-
-		final_y := y + view.top
-		if final_y >= terminal_dimensions.y {
-			break
-		}
-
-		for x, ch := range line[scroll.x:last_col] {
-			if x >= view.Width() {
-				break
-			}
-
-			final_x := x + view.left
-			if final_x >= terminal_dimensions.x {
-				break
-			}
-
-			termbox.SetCell(final_x, final_y, ch, termbox.ColorDefault, termbox.ColorDefault)
-		}
-	}
 	return
 }
 

@@ -77,6 +77,14 @@ func TestSetLine(t *testing.T) {
 	}
 }
 
+func BenchmarkSetLine(b *testing.B) {
+	buffer := &BaseBuffer{}
+	Load(buffer, strings.NewReader("line0\nline1\nline2\nline3"))
+	for i := 0; i < b.N; i++ {
+		buffer.SetLine(2, "test")
+	}
+}
+
 // testing editableBuffer
 func TestLoad(t *testing.T) {
 	buffer := &BaseBuffer{}

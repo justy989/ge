@@ -4,7 +4,7 @@ import "github.com/nsf/termbox-go"
 
 type Layout interface {
 	Rect() Rect
-	Draw(terminal_dimensions Point)
+	Draw(terminal_dimensions Point, settings *DrawSettings)
 	CalculateRect(rect Rect)
 	FindView(query Point) Layout
 }
@@ -35,11 +35,11 @@ func (layout *ListLayout) Rect() Rect {
 	return layout.rect
 }
 
-func (layout *ListLayout) Draw(terminal_dimensions Point) {
+func (layout *ListLayout) Draw(terminal_dimensions Point, settings *DrawSettings) {
 	if layout.horizontal {
 		rect_width := layout.rect.Width()
 		for _, child := range layout.layouts {
-			child.Draw(terminal_dimensions)
+			child.Draw(terminal_dimensions, settings)
 			for i := 0; i < rect_width; i++ {
 				termbox.SetCell(layout.rect.left+i, child.Rect().bottom, '─', termbox.ColorDefault, termbox.ColorDefault)
 			}
@@ -47,7 +47,7 @@ func (layout *ListLayout) Draw(terminal_dimensions Point) {
 	} else {
 		rect_height := layout.rect.Height()
 		for _, child := range layout.layouts {
-			child.Draw(terminal_dimensions)
+			child.Draw(terminal_dimensions, settings)
 			for i := 0; i < rect_height; i++ {
 				termbox.SetCell(child.Rect().right, layout.rect.top+i, '│', termbox.ColorDefault, termbox.ColorDefault)
 			}
@@ -118,9 +118,9 @@ func (layout *ViewLayout) Rect() Rect {
 	return layout.view.rect
 }
 
-func (layout *ViewLayout) Draw(terminal_dimensions Point) {
+func (layout *ViewLayout) Draw(terminal_dimensions Point, settings *DrawSettings) {
 	if layout.view.buffer != nil {
-		layout.view.buffer.Draw(layout.view.rect, layout.view.scroll, terminal_dimensions)
+		DrawBuffer(layout.view.buffer, layout.view.rect, layout.view.scroll, terminal_dimensions, settings)
 	}
 }
 
@@ -140,9 +140,9 @@ func (layout *TabLayout) Rect() Rect {
 	return layout.rect
 }
 
-func (layout *TabLayout) Draw(terminal_dimensions Point) {
+func (layout *TabLayout) Draw(terminal_dimensions Point, settings *DrawSettings) {
 	// TODO: draw tab bar if we have other tabs
-	layout.root.Draw(terminal_dimensions)
+	layout.root.Draw(terminal_dimensions, settings)
 
 	// debuging drawing selection
 	rect := layout.selection.Rect()
@@ -310,6 +310,27 @@ func (layout *TabLayout) Remove() {
 }
 
 func (layout *TabLayout) Select(direction Direction) {
+	list_selection_layout, is_list_selection := layout.selection.(*ListLayout)
+	if is_list_selection {
+		if len(list_selection_layout.layouts) == 1 {
+			if list_selection_layout == layout.root {
+				layout.root = list_selection_layout.layouts[0] // "fuhget abaht it" -Garbage Collector, Circa 57 BC
+				layout.selection = layout.root
+			} else {
+				// remove the list layout with only 1 element
+				parent := findLayoutParent(layout.root, layout.selection)
+				list_parent := parent.(*ListLayout)
+				for i, child := range list_parent.layouts {
+					if child == layout {
+						list_parent.layouts[i] = list_selection_layout.layouts[0]
+						layout.selection = list_parent.layouts[i]
+						break
+					}
+				}
+			}
+		}
+	}
+
 	switch direction {
 	default:
 		panic("unexpected direction")
@@ -327,10 +348,6 @@ func (layout *TabLayout) Select(direction Direction) {
 				Point{current_layout.view.rect.left, current_layout.view.rect.top})
 			layout.selection = layout.FindView(Point{new_x, cursor.y})
 		case *ListLayout:
-			if len(current_layout.layouts) == 1 {
-				layout.Remove()
-			}
-
 			layout.selection = layout.FindView(Point{new_x, current_layout.Rect().top})
 		}
 	case DIRECTION_UP:
@@ -435,7 +452,7 @@ func (layout *TabListLayout) Rect() Rect {
 	return layout.rect
 }
 
-func (layout *TabListLayout) Draw(terminal_dimensions Point) {
+func (layout *TabListLayout) Draw(terminal_dimensions Point, settings *DrawSettings) {
 	if len(layout.tabs) > 1 {
 		for i := 0; i < layout.rect.right; i++ {
 			termbox.SetCell(i, layout.rect.top, '─', termbox.ColorDefault, termbox.ColorDefault)
@@ -456,7 +473,7 @@ func (layout *TabListLayout) Draw(terminal_dimensions Point) {
 		}
 	}
 
-	layout.tabs[layout.selection].Draw(terminal_dimensions)
+	layout.tabs[layout.selection].Draw(terminal_dimensions, settings)
 }
 
 func (layout *TabListLayout) CalculateRect(rect Rect) {
