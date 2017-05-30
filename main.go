@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+// TODO: greetings 'something about a go pro'
+
 func main() {
 	flag.Parse()
 	files := flag.Args()
@@ -88,6 +90,9 @@ func main() {
 		}
 	}()
 
+	var vim Vim
+	vim.init()
+
 loop:
 	for {
 		terminal_dimensions.x, terminal_dimensions.y = termbox.Size()
@@ -161,14 +166,14 @@ loop:
 				default:
 					if selected_layout_is_view && b != nil {
 						switch ev.Ch {
-						case 'h':
-							selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{-1, 0})
-						case 'l':
-							selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{1, 0})
-						case 'k':
-							selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{0, -1})
-						case 'j':
-							selected_view_layout.view.cursor = MoveCursor(b, selected_view_layout.view.cursor, Point{0, 1})
+                              default:
+                                   state, action := vim.ParseAction(ev.Ch)
+                                   if state == PARSE_ACTION_STATE_COMPLETE {
+                                        err := vim.Perform(&action, b)
+                                        if err == nil {
+                                             selected_view_layout.view.cursor = b.Cursor()
+                                        }
+                                   }
 						case 'G':
 							selected_view_layout.view.cursor = Point{0, len(b.Lines()) - 1}
 							selected_view_layout.view.cursor = ClampOn(b, selected_view_layout.view.cursor)
@@ -184,8 +189,6 @@ loop:
 							InsertLine(b, 9, "TESTING")
 						case 'J':
 							Join(b, selected_view_layout.view.cursor.y)
-						case 'd':
-							DeleteLine(b, selected_view_layout.view.cursor.y)
 						case 'u':
 							undoer, ok := b.(Undoer)
 							if ok {
