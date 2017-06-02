@@ -142,24 +142,45 @@ func (buffer *undoBuffer) Commit() (err error) {
 
 func (buffer *undoBuffer) InsertLine(lineIndex int, toInsert string) (err error) {
 	// TODO: bounds checking
-	change := change{insertLine, "", toInsert, Point{0, lineIndex}}
-	buffer.Buffer.InsertLine(lineIndex, toInsert)
-	buffer.pending.changes = append(buffer.pending.changes, change)
-	return nil
+	if buffer.nPending != 0 {
+		change := change{insertLine, "", toInsert, Point{0, lineIndex}}
+		buffer.pending.changes = append(buffer.pending.changes, change)
+	}
+	return buffer.Buffer.InsertLine(lineIndex, toInsert)
 }
 
 func (buffer *undoBuffer) SetLine(lineIndex int, newValue string) (err error) {
 	// TODO: bounds checking
-	change := change{setLine, buffer.Lines()[lineIndex], newValue, Point{0, lineIndex}}
-	buffer.Buffer.SetLine(lineIndex, newValue)
-	buffer.pending.changes = append(buffer.pending.changes, change)
-	return nil
+	if buffer.nPending != 0 {
+		change := change{setLine, buffer.Lines()[lineIndex], newValue, Point{0, lineIndex}}
+		buffer.pending.changes = append(buffer.pending.changes, change)
+	}
+	return buffer.Buffer.SetLine(lineIndex, newValue)
 }
 
 func (buffer *undoBuffer) DeleteLine(lineIndex int) (err error) {
 	// TODO: bounds checking
-	change := change{deleteLine, buffer.Lines()[lineIndex], "", Point{0, lineIndex}}
+	if buffer.nPending != 0 {
+		change := change{deleteLine, buffer.Lines()[lineIndex], "", Point{0, lineIndex}}
+		buffer.pending.changes = append(buffer.pending.changes, change)
+	}
 	buffer.Buffer.DeleteLine(lineIndex)
-	buffer.pending.changes = append(buffer.pending.changes, change)
 	return nil
+}
+
+// clears all lines from the buffer
+func (buffer *undoBuffer) Clear() (err error) {
+	if buffer.nPending != 0 {
+		// we have a change pending. we will save the clear as a grouping of deletes
+		for _ = range buffer.Lines() {
+			err = buffer.DeleteLine(0)
+			if err != nil {
+				panic("where did our line go?")
+				return err
+			}
+		}
+		return nil
+	} else {
+		return buffer.Buffer.Clear()
+	}
 }
