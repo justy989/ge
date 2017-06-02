@@ -114,6 +114,7 @@ func (buffer *BaseBuffer) validateLocation(location Point) (err error) {
 func (buffer *BaseBuffer) InsertLine(lineIndex int, toInsert string) (err error) {
 	if lineIndex == len(buffer.lines) {
 		buffer.lines = append(buffer.lines, toInsert)
+		return
 	}
 
 	if err = buffer.validateLineIndex(lineIndex); err != nil {
