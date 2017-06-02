@@ -105,7 +105,7 @@ loop:
 		if selected_layout_is_view {
 			b = selected_view_layout.view.buffer
 			cursor_on_terminal = calc_cursor_on_terminal(
-				PrintableCursor(b, selected_view_layout.view.cursor, &settings.draw),
+				PrintableCursor(b, b.Cursor(), &settings.draw),
 				selected_view_layout.view.scroll,
 				Point{selected_view_layout.view.rect.left, selected_view_layout.view.rect.top})
 			termbox.SetCursor(cursor_on_terminal.x, cursor_on_terminal.y)
@@ -166,29 +166,27 @@ loop:
 				default:
 					if selected_layout_is_view && b != nil {
 						switch ev.Ch {
-                              default:
-                                   state, action := vim.ParseAction(ev.Ch)
-                                   if state == PARSE_ACTION_STATE_COMPLETE {
-                                        err := vim.Perform(&action, b)
-                                        if err == nil {
-                                             selected_view_layout.view.cursor = b.Cursor()
-                                        }
-                                   }
+						default:
+							state, action := vim.ParseAction(ev.Ch)
+							if state == PARSE_ACTION_STATE_COMPLETE {
+								err := vim.Perform(&action, b)
+								if err == nil {
+									//selected_view_layout.view.cursor = b.Cursor()
+								} else {
+									log.Println(err)
+								}
+							}
 						case 'G':
-							selected_view_layout.view.cursor = Point{0, len(b.Lines()) - 1}
-							selected_view_layout.view.cursor = ClampOn(b, selected_view_layout.view.cursor)
+							new_cursor := Point{0, len(b.Lines()) - 1}
+							b.SetCursor(ClampOn(b, new_cursor))
 						case '$':
-							selected_view_layout.view.cursor = Point{len(b.Lines()[b.Cursor().y]) - 1, b.Cursor().y}
-							selected_view_layout.view.cursor = ClampOn(b, selected_view_layout.view.cursor)
+							new_cursor := Point{len(b.Lines()[b.Cursor().y]) - 1, b.Cursor().y}
+							b.SetCursor(ClampOn(b, new_cursor))
 						case '0':
-							selected_view_layout.view.cursor = Point{0, b.Cursor().y}
-							selected_view_layout.view.cursor = ClampOn(b, selected_view_layout.view.cursor)
-						case 'A':
-							Append(b, 9, "WOAH LOOK AT THIS NEW LINE")
-						case 'I':
-							InsertLine(b, 9, "TESTING")
+							new_cursor := Point{0, b.Cursor().y}
+							b.SetCursor(ClampOn(b, new_cursor))
 						case 'J':
-							Join(b, selected_view_layout.view.cursor.y)
+							Join(b, b.Cursor().y)
 						case 'u':
 							undoer, ok := b.(Undoer)
 							if ok {
@@ -200,13 +198,14 @@ loop:
 								undoer.Redo()
 							}
 						}
+						selected_view_layout.view.cursor = b.Cursor()
 					}
 				}
 
 				selected_view_layout, selected_layout_is_view = current_tab.selection.(*ViewLayout)
 				if selected_layout_is_view {
 					selected_view_layout.view.ScrollTo(
-						PrintableCursor(selected_view_layout.view.buffer, selected_view_layout.view.cursor, &settings.draw))
+						PrintableCursor(selected_view_layout.view.buffer, selected_view_layout.view.buffer.Cursor(), &settings.draw))
 				}
 
 			}
