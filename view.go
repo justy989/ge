@@ -1,4 +1,4 @@
-package main
+package ge
 
 type View struct {
 	rect   Rect

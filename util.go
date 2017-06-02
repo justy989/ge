@@ -1,4 +1,4 @@
-package main
+package ge
 
 type Direction int
 

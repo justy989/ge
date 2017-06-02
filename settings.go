@@ -1,4 +1,4 @@
-package main
+package ge
 
 type DrawSettings struct {
 	tabWidth int
