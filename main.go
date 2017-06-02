@@ -83,8 +83,20 @@ func main() {
 
 	event_chan := make(chan termbox.Event, 1)
 	go func() {
+		binder := NewBinder()
+		binder.Bind("hi", func() { log.Println("hi") })
+		binder.Bind("hey", func() { log.Println("hey") })
+		binder.Bind("hi.", func() { log.Println("I matched anything") })
 		for {
-			event_chan <- termbox.PollEvent()
+			ev := termbox.PollEvent()
+			switch ev.Type {
+			case termbox.EventKey:
+				if ev.Ch != 0 {
+					binder.Handle(byte(ev.Ch))
+				}
+			}
+
+			event_chan <- ev
 		}
 	}()
 
