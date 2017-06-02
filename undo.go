@@ -176,7 +176,7 @@ func (buffer *undoBuffer) Clear() (err error) {
 			err = buffer.DeleteLine(0)
 			if err != nil {
 				panic("where did our line go?")
-				return err
+				//return err
 			}
 		}
 		return nil

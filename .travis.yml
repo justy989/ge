@@ -6,3 +6,4 @@ install:
   - go get github.com/nsf/termbox-go
 script:
   - go test
+  - go tool vet -all .

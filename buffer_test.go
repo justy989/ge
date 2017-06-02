@@ -154,7 +154,7 @@ func TestLoad(t *testing.T) {
 	for ix, line := range buffer.Lines() {
 		t.Log(line)
 		if expected := fmt.Sprintf("line%d", ix); line != expected {
-			t.Fatalf("Invalid line %d, %s", line)
+			t.Fatalf("Invalid line %s, %s", line, expected)
 		}
 	}
 }

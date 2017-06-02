@@ -75,14 +75,6 @@ func (buffer *BaseBuffer) Write(bytes []byte) (int, error) {
 func (buffer *BaseBuffer) Read(bytes []byte) (int, error) {
 	// TODO: Implement reader
 	return -1, errors.New("not yet implemented")
-
-	// TODO: read starting at buffer.readNext up to len(bytes)
-	var nRead int
-	for _ = range bytes {
-		nRead++
-	}
-
-	return nRead, nil
 }
 
 // writer interface implementation
