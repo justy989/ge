@@ -1,4 +1,4 @@
-package main
+package ge
 
 import (
 	"bytes"
@@ -75,14 +75,6 @@ func (buffer *BaseBuffer) Write(bytes []byte) (int, error) {
 func (buffer *BaseBuffer) Read(bytes []byte) (int, error) {
 	// TODO: Implement reader
 	return -1, errors.New("not yet implemented")
-
-	// TODO: read starting at buffer.readNext up to len(bytes)
-	var nRead int
-	for _ = range bytes {
-		nRead++
-	}
-
-	return nRead, nil
 }
 
 // writer interface implementation
@@ -101,7 +93,7 @@ func (buffer *BaseBuffer) validateLineIndex(lineIndex int) (err error) {
 func (buffer *BaseBuffer) validateLocation(location Point) (err error) {
 	if err = buffer.validateLineIndex(location.y); err != nil {
 		return err
-	} else if location.x >= len(buffer.lines[location.y]) {
+	} else if location.x > len(buffer.lines[location.y]) {
 		// allow moving cursor to empty line
 		if location.x != 0 {
 			return errors.New("invalid x location specified")
@@ -114,6 +106,7 @@ func (buffer *BaseBuffer) validateLocation(location Point) (err error) {
 func (buffer *BaseBuffer) InsertLine(lineIndex int, toInsert string) (err error) {
 	if lineIndex == len(buffer.lines) {
 		buffer.lines = append(buffer.lines, toInsert)
+		return
 	}
 
 	if err = buffer.validateLineIndex(lineIndex); err != nil {

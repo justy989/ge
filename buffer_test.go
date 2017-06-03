@@ -1,4 +1,4 @@
-package main
+package ge
 
 import (
 	"fmt"
@@ -31,8 +31,9 @@ func TestInsertLine(t *testing.T) {
 	}
 
 	err = buffer.InsertLine(1, "new")
-	if len(buffer.Lines()) < 3 {
-		t.Fatal(buffer.String())
+	if len(buffer.Lines()) != 3 {
+		t.Logf("\n%s", buffer.String())
+		t.Fatalf("buffer has %d lines. expected 3", len(buffer.Lines()))
 	}
 	if buffer.Lines()[0] != "test" || buffer.Lines()[1] != "new" || buffer.Lines()[2] != "blah" {
 		t.Fatal(buffer.String())
@@ -73,7 +74,60 @@ func TestSetLine(t *testing.T) {
 
 	err = buffer.SetLine(6, "new6")
 	if err == nil {
-		t.FailNow()
+		t.Fatal("expected error due to invalid input")
+	}
+}
+
+func TestDeleteLine(t *testing.T) {
+	buffer := &BaseBuffer{}
+	buffer.Write([]byte("one\ntwo\nthree"))
+	if len(buffer.Lines()) != 3 {
+		t.Fatal("invalid number of lines")
+	}
+
+	var err error
+	invalidInputs := []int{3, -1}
+	for _, invalid := range invalidInputs {
+		t.Logf("testing invalid input %d", invalid)
+		err = buffer.DeleteLine(invalid)
+		if err == nil {
+			t.Fatal("expected to fail with invalid input")
+		}
+		// verify that we still have five lines
+		if len(buffer.Lines()) != 3 {
+			t.Fatal("invalid number of lines")
+		}
+	}
+	err = buffer.DeleteLine(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(buffer.Lines()) != 2 || buffer.Lines()[0] != "two" {
+		t.Fatalf("unexpected buffer state after delete")
+	}
+
+	err = buffer.DeleteLine(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(buffer.Lines()) != 1 || buffer.Lines()[0] != "two" {
+		t.Fatalf("unexpected buffer state after delete")
+	}
+
+	err = buffer.DeleteLine(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(buffer.Lines()) != 0 {
+		t.Fatalf("unexpected buffer state after delete")
+	}
+
+	err = buffer.DeleteLine(0)
+	if err == nil {
+		t.Fatal("expected to fail with invalid input. we should have no lines left!")
 	}
 }
 
@@ -100,7 +154,7 @@ func TestLoad(t *testing.T) {
 	for ix, line := range buffer.Lines() {
 		t.Log(line)
 		if expected := fmt.Sprintf("line%d", ix); line != expected {
-			t.Fatalf("Invalid line %d, %s", line)
+			t.Fatalf("Invalid line %s, %s", line, expected)
 		}
 	}
 }

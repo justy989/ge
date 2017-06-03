@@ -1,4 +1,4 @@
-package main
+package ge
 
 import (
 	"errors"
@@ -23,6 +23,7 @@ func Load(buffer Buffer, reader io.Reader) (err error) {
 				log.Fatalf("os.Stat() error: %v", err)
 			}
 			if info.IsDir() {
+				file.Seek(0, os.SEEK_SET)
 				names, err := file.Readdirnames(0)
 				if err != nil {
 					log.Fatalf("Readdirnames() error: %v", err)
