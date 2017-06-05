@@ -1,4 +1,4 @@
-package ge
+package edit
 
 // the undoer interface wraps a buffer with undo functionality
 type Undoer interface {
@@ -69,11 +69,11 @@ func (buffer *undoBuffer) Undo() (err error) {
 		default:
 			panic("I AM SO FREAKING OUT")
 		case insertLine:
-			buffer.Buffer.DeleteLine(toUndo.location.y)
+			buffer.Buffer.DeleteLine(toUndo.location.Y)
 		case setLine:
-			buffer.Buffer.SetLine(toUndo.location.y, toUndo.old)
+			buffer.Buffer.SetLine(toUndo.location.Y, toUndo.old)
 		case deleteLine:
-			buffer.Buffer.InsertLine(toUndo.location.y, toUndo.old)
+			buffer.Buffer.InsertLine(toUndo.location.Y, toUndo.old)
 		}
 	}
 	if buffer.changeIndex >= 0 {
@@ -95,11 +95,11 @@ func (buffer *undoBuffer) Redo() (err error) {
 		default:
 			panic("I AM SO FREAKING OUT")
 		case insertLine:
-			buffer.Buffer.InsertLine(toRedo.location.y, toRedo.new)
+			buffer.Buffer.InsertLine(toRedo.location.Y, toRedo.new)
 		case setLine:
-			buffer.Buffer.SetLine(toRedo.location.y, toRedo.new)
+			buffer.Buffer.SetLine(toRedo.location.Y, toRedo.new)
 		case deleteLine:
-			buffer.Buffer.DeleteLine(toRedo.location.y)
+			buffer.Buffer.DeleteLine(toRedo.location.Y)
 		}
 	}
 	buffer.changeIndex++

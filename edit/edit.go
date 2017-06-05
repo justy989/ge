@@ -1,4 +1,4 @@
-package ge
+package edit
 
 import (
 	"errors"
@@ -73,20 +73,20 @@ func Insert(buffer Buffer, location Point, toInsert string) (err error) {
 		undoer.StartChange()
 		defer undoer.Commit()
 	}
-	if numLines := len(buffer.Lines()); location.y > numLines {
+	if numLines := len(buffer.Lines()); location.Y > numLines {
 		return errors.New(fmt.Sprintf("Invalid Point %v", location))
-	} else if location.y == numLines {
+	} else if location.Y == numLines {
 		return AppendLine(buffer, toInsert)
 	}
 
-	line := buffer.Lines()[location.y]
-	if numCharacters := len(line); location.x > numCharacters {
+	line := buffer.Lines()[location.Y]
+	if numCharacters := len(line); location.X > numCharacters {
 		return errors.New(fmt.Sprintf("Invalid Point %v", location))
-	} else if location.x == numCharacters {
-		return Append(buffer, location.y, toInsert)
+	} else if location.X == numCharacters {
+		return Append(buffer, location.Y, toInsert)
 	}
 
-	buffer.SetLine(location.y, line[:location.x]+toInsert+line[location.x:])
+	buffer.SetLine(location.Y, line[:location.X]+toInsert+line[location.X:])
 	return
 }
 
@@ -153,21 +153,21 @@ func AppendLine(buffer Buffer, toInsert string) error {
 // clamp point to point to a character on the buffer including the location
 // immediately after the end of lines
 func ClampOn(buffer Buffer, point Point) (p Point) {
-	p.y = Clamp(point.y, 0, len(buffer.Lines())-1)
-	p.x = Clamp(point.x, 0, len(buffer.Lines()[p.y]))
+	p.Y = Clamp(point.Y, 0, len(buffer.Lines())-1)
+	p.X = Clamp(point.X, 0, len(buffer.Lines()[p.Y]))
 	return
 }
 
 // clamp point to point to a character on the buffer
 func ClampIn(buffer Buffer, point Point) (p Point) {
-	p.y = Clamp(point.y, 0, len(buffer.Lines())-1)
-	p.x = Clamp(point.x, 0, len(buffer.Lines()[p.y])-1)
+	p.Y = Clamp(point.Y, 0, len(buffer.Lines())-1)
+	p.X = Clamp(point.X, 0, len(buffer.Lines()[p.Y])-1)
 	return
 }
 
 // move cursor along buffer by delta
 func MoveCursor(buffer Buffer, cursor Point, delta Point) Point {
-	final := Point{cursor.x + delta.x, cursor.y + delta.y}
+	final := Point{cursor.X + delta.X, cursor.Y + delta.Y}
 	cursor = ClampOn(buffer, final)
 	return cursor
 }

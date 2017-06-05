@@ -1,4 +1,4 @@
-package ge
+package edit
 
 import (
 	"bytes"
@@ -91,11 +91,11 @@ func (buffer *BaseBuffer) validateLineIndex(lineIndex int) (err error) {
 }
 
 func (buffer *BaseBuffer) validateLocation(location Point) (err error) {
-	if err = buffer.validateLineIndex(location.y); err != nil {
+	if err = buffer.validateLineIndex(location.Y); err != nil {
 		return err
-	} else if location.x > len(buffer.lines[location.y]) {
+	} else if location.X > len(buffer.lines[location.Y]) {
 		// allow moving cursor to empty line
-		if location.x != 0 {
+		if location.X != 0 {
 			return errors.New("invalid x location specified")
 		}
 	}

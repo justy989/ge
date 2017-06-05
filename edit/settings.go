@@ -1,9 +1,9 @@
-package ge
+package edit
 
 type DrawSettings struct {
-	tabWidth int
+	TabWidth int
 }
 
 type Settings struct {
-	draw DrawSettings
+	Draw DrawSettings
 }

@@ -1,4 +1,4 @@
-package ge
+package edit
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 func printLen(toPrint rune, settings *DrawSettings) int {
 	switch toPrint {
 	case '	':
-		return settings.tabWidth
+		return settings.TabWidth
 	default:
 		return 1
 	}
@@ -35,7 +35,7 @@ func ConvertX(line string, x int, settings *DrawSettings) int {
 }
 
 func PrintableCursor(buffer Buffer, point Point, settings *DrawSettings) Point {
-	return Point{x: ConvertX(buffer.Lines()[point.y], point.x, settings), y: point.y}
+	return Point{X: ConvertX(buffer.Lines()[point.Y], point.X, settings), Y: point.Y}
 }
 
 type Highlighter interface {
@@ -151,23 +151,23 @@ func NewHighlighter(buffer Buffer) Highlighter {
 }
 
 func (syntax *GoSyntax) Highlight(point Point) (termbox.Attribute, termbox.Attribute) {
-	return syntax.Colors[point.y][point.x].fg, syntax.Colors[point.y][point.x].bg
+	return syntax.Colors[point.Y][point.X].fg, syntax.Colors[point.Y][point.X].bg
 }
 
 func DrawBuffer(buffer Buffer, view Rect, scroll Point, terminal_dimensions Point, settings *DrawSettings) (err error) {
-	last_row := scroll.y + view.Height()
+	last_row := scroll.Y + view.Height()
 	if last_row > len(buffer.Lines()) {
 		last_row = len(buffer.Lines())
 	}
 
 	syntax := NewHighlighter(buffer)
 
-	for y, lineBytes := range buffer.Lines()[scroll.y:last_row] {
+	for y, lineBytes := range buffer.Lines()[scroll.Y:last_row] {
 		if y >= view.Height() {
 			break
 		}
-		final_y := y + view.top
-		if final_y >= terminal_dimensions.y {
+		final_y := y + view.Top
+		if final_y >= terminal_dimensions.Y {
 			break
 		}
 
@@ -179,16 +179,16 @@ func DrawBuffer(buffer Buffer, view Rect, scroll Point, terminal_dimensions Poin
 				break
 			}
 
-			final_x := printedWidth + view.left
-			if final_x >= terminal_dimensions.x {
+			final_x := printedWidth + view.Left
+			if final_x >= terminal_dimensions.X {
 				break
 			}
 
 			lineWidth += printLen(ch, settings)
-			if lineWidth > scroll.x {
-				fgColor, bgColor := syntax.Highlight(Point{x: column, y: scroll.y + y})
+			if lineWidth > scroll.X {
+				fgColor, bgColor := syntax.Highlight(Point{X: column, Y: scroll.Y + y})
 				termbox.SetCell(final_x, final_y, ch, fgColor, bgColor)
-				printedWidth = lineWidth - scroll.x
+				printedWidth = lineWidth - scroll.X
 			}
 		}
 	}

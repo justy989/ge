@@ -1,14 +1,14 @@
-package ge
+package edit
 
 import "fmt"
 
 type Point struct {
-	x int
-	y int
+	X int
+	Y int
 }
 
 func (point *Point) String() string {
-	return fmt.Sprintf("%d, %d", point.x, point.y)
+	return fmt.Sprintf("%d, %d", point.X, point.Y)
 }
 
 // returns true if point equals location
@@ -18,18 +18,18 @@ func (point *Point) Equals(location Point) bool {
 
 // returns true if point is after location
 func (point *Point) IsAfter(location Point) bool {
-	if point.y == location.y {
-		return point.x > location.x
+	if point.Y == location.Y {
+		return point.X > location.X
 	} else {
-		return point.y > location.y
+		return point.Y > location.Y
 	}
 }
 
 // returns true if point is before location
 func (point *Point) IsBefore(location Point) bool {
-	if point.y == location.y {
-		return point.x < location.x
+	if point.Y == location.Y {
+		return point.X < location.X
 	} else {
-		return point.y < location.y
+		return point.Y < location.Y
 	}
 }

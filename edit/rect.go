@@ -1,22 +1,22 @@
-package ge
+package edit
 
 type Rect struct {
-	left   int
-	top    int
-	right  int
-	bottom int
+	Left   int
+	Top    int
+	Right  int
+	Bottom int
 }
 
 func NewRectFromPointAndDimension(point Point, dimensions Point) Rect {
-	return Rect{point.x, point.y, point.x + dimensions.x, point.y + dimensions.y}
+	return Rect{point.X, point.Y, point.X + dimensions.X, point.Y + dimensions.Y}
 }
 
 func (rect *Rect) Width() int {
-	return rect.right - rect.left
+	return rect.Right - rect.Left
 }
 
 func (rect *Rect) Height() int {
-	return rect.bottom - rect.top
+	return rect.Bottom - rect.Top
 }
 
 func (rect *Rect) Dimensions() Point {
@@ -24,8 +24,8 @@ func (rect *Rect) Dimensions() Point {
 }
 
 func (rect *Rect) Contains(p Point) bool {
-	if p.x >= rect.left && p.x <= rect.right &&
-		p.y >= rect.top && p.y <= rect.bottom {
+	if p.X >= rect.Left && p.X <= rect.Right &&
+		p.Y >= rect.Top && p.Y <= rect.Bottom {
 		return true
 	}
 

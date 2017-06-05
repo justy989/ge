@@ -1,4 +1,4 @@
-package ge
+package edit
 
 type Direction int
 
@@ -21,8 +21,8 @@ func Clamp(value int, min int, max int) int {
 	return value
 }
 
-func calc_cursor_on_terminal(cursor Point, scroll Point, view_top_left Point) Point {
-	cursor.x = cursor.x - scroll.x + view_top_left.x
-	cursor.y = cursor.y - scroll.y + view_top_left.y
+func Calc_cursor_on_terminal(cursor Point, scroll Point, view_top_left Point) Point {
+	cursor.X = cursor.X - scroll.X + view_top_left.X
+	cursor.Y = cursor.Y - scroll.Y + view_top_left.Y
 	return cursor
 }

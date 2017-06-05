@@ -1,4 +1,4 @@
-package ge
+package edit
 
 import (
 	//"log"
@@ -70,7 +70,7 @@ type Span struct {
 	end   int
 }
 
-func (vim *Vim) init() {
+func (vim *Vim) Init() {
 	vim.binds = append(vim.binds, KeyBind{key: 'h', function: parseMotionLeft})
 	vim.binds = append(vim.binds, KeyBind{key: 'l', function: parseMotionRight})
 	vim.binds = append(vim.binds, KeyBind{key: 'j', function: parseMotionDown})
@@ -189,9 +189,9 @@ func motionUp(vim *Vim, action *Action, buffer Buffer) (r Range) {
 	if aF.Pointer() == bF.Pointer() {
 		r.end = MoveCursor(buffer, r.start, Point{0, -1})
 	} else {
-		r.start.x = stringLastIndex(buffer.Lines()[r.start.y])
-		r.end.y = r.start.y - 1
-		r.end.x = 0
+		r.start.X = stringLastIndex(buffer.Lines()[r.start.Y])
+		r.end.Y = r.start.Y - 1
+		r.end.X = 0
 	}
 	return r
 }
@@ -203,15 +203,15 @@ func motionDown(vim *Vim, action *Action, buffer Buffer) (r Range) {
 	if aF.Pointer() == bF.Pointer() {
 		r.end = MoveCursor(buffer, r.start, Point{0, 1})
 	} else {
-		r.start.x = 0
-		r.end.y = r.start.y + 1
-		r.end.x = stringLastIndex(buffer.Lines()[r.end.y])
+		r.start.X = 0
+		r.end.Y = r.start.Y + 1
+		r.end.X = stringLastIndex(buffer.Lines()[r.end.Y])
 	}
 	return r
 }
 
 func motionCurrentLine(vim *Vim, action *Action, buffer Buffer) (r Range) {
-	line := buffer.Cursor().y
+	line := buffer.Cursor().Y
 	r.start = Point{0, line}
 	r.end = Point{stringLastIndex(buffer.Lines()[line]), line}
 	return r
@@ -233,28 +233,28 @@ func verbDelete(vim *Vim, buffer Buffer, r Range) (err error) {
 	// calculate where the cursor will end, don't move it unless we are deleting up
 	end_cursor := buffer.Cursor()
 	if end_cursor.IsAfter(r.end) {
-		end_cursor.y = r.end.y
-		if r.start.y == r.end.y {
-			end_cursor.x = r.end.x
+		end_cursor.Y = r.end.Y
+		if r.start.Y == r.end.Y {
+			end_cursor.X = r.end.X
 		}
 	}
 
 	r.Sort()
 
 	// find line spans
-	for l := r.start.y; l <= r.end.y; l++ {
+	for l := r.start.Y; l <= r.end.Y; l++ {
 		var span Span
 
-		// if we are on the starting line, use start.x, otherwise use the beginning of the line
-		if l == r.start.y {
-			span.start = r.start.x
+		// if we are on the starting line, use start.X, otherwise use the beginning of the line
+		if l == r.start.Y {
+			span.start = r.start.X
 		} else {
 			span.start = 0
 		}
 
-		// if we are on the ending line, use end.x, otherwise use the end of the line
-		if l == r.end.y {
-			span.end = r.end.x
+		// if we are on the ending line, use end.X, otherwise use the end of the line
+		if l == r.end.Y {
+			span.end = r.end.X
 		} else {
 			span.end = stringLastIndex(buffer.Lines()[l])
 		}
@@ -265,7 +265,7 @@ func verbDelete(vim *Vim, buffer Buffer, r Range) (err error) {
 	// set line or delete line for each span
 	deleted_lines := 0
 	for i, span := range spans {
-		line_index := r.start.y + i - deleted_lines
+		line_index := r.start.Y + i - deleted_lines
 
 		if span.start == 0 && span.end == stringLastIndex(buffer.Lines()[line_index]) {
 			// the range included the entire line, so just remove it

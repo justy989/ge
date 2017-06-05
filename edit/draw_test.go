@@ -1,4 +1,4 @@
-package ge
+package edit
 
 import (
 	"github.com/nsf/termbox-go"
@@ -43,24 +43,24 @@ func BenchmarkDrawBuffer(b *testing.B) {
 	Load(buffer, f)
 
 	terminal_dimensions := Point{}
-	terminal_dimensions.x, terminal_dimensions.y = termbox.Size()
+	terminal_dimensions.X, terminal_dimensions.Y = termbox.Size()
 
 	tabs := TabListLayout{}
-	tabs.tabs = append(tabs.tabs, TabLayout{})
-	current_tab := &tabs.tabs[tabs.selection]
+	tabs.Tabs = append(tabs.Tabs, TabLayout{})
+	current_tab := &tabs.Tabs[tabs.Selection]
 	root_layout := ViewLayout{}
-	root_layout.view.buffer = buffer
-	current_tab.root = &root_layout
-	current_tab.selection = current_tab.root
+	root_layout.View.Buffer = buffer
+	current_tab.Root = &root_layout
+	current_tab.Selection = current_tab.Root
 
-	settings := Settings{draw: DrawSettings{4}}
+	settings := Settings{Draw: DrawSettings{4}}
 
-	full_view := Rect{0, 0, terminal_dimensions.x, terminal_dimensions.y}
+	full_view := Rect{0, 0, terminal_dimensions.X, terminal_dimensions.Y}
 	tabs.CalculateRect(full_view)
 
 	for i := 0; i < b.N; i++ {
 		termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
-		tabs.Draw(terminal_dimensions, &settings.draw)
+		tabs.Draw(terminal_dimensions, &settings.Draw)
 		termbox.Flush()
 	}
 }
