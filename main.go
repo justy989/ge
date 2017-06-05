@@ -54,8 +54,10 @@ func main() {
 		}
 
 		log.Print("Loading " + file)
-		b := NewUndoer(&BaseBuffer{})
+		var b Buffer
+		b = &BaseBuffer{}
 		Load(b, f)
+		b = NewUndoer(NewGoSyntaxHighlighter(b))
 		buffers = append(buffers, b)
 	}
 	if len(buffers) == 0 {
