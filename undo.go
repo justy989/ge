@@ -1,4 +1,4 @@
-package ge
+package main
 
 // the undoer interface wraps a buffer with undo functionality
 type Undoer interface {
